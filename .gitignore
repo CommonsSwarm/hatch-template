@@ -11,6 +11,8 @@ packages/hardhat/deployments
 packages/react-app/src/contracts
 packages/hardhat/cache
 packages/hardhat/typechain
+packages/hardhat/coverage/
+packages/hardhat/coverage.json
 
 docker/**/data
 
