@@ -45,7 +45,6 @@
     "compile": "hardhat compile",
     "deploy": "hardhat run scripts/deploy.ts",
     "postdeploy": "hardhat run scripts/publish.ts",
-    "lint": "prettier --list-different 'contracts/**/*.sol'",
     "watch": "node scripts/watch.js",
     "accounts": "hardhat accounts",
     "balance": "hardhat balance",
