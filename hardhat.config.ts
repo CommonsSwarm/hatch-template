@@ -6,6 +6,8 @@ import "@nomiclabs/hardhat-waffle";
 import "@tenderly/hardhat-tenderly";
 import "@nomiclabs/hardhat-etherscan";
 import "hardhat-typechain";
+import 'hardhat-deploy'
+import 'hardhat-gas-reporter'
 import "solidity-coverage";
 
 import { task, HardhatUserConfig } from "hardhat/config";
@@ -25,13 +27,13 @@ const { isAddress, getAddress, formatUnits, parseUnits } = utils;
 //
 // Select the network you want to deploy to here:
 //
-const defaultNetwork = "localhost";
+const defaultNetwork = "hardhat";
 
 function mnemonic() {
   try {
     return fs.readFileSync("./mnemonic.txt").toString().trim();
   } catch (e) {
-    if (defaultNetwork !== "localhost") {
+    if (defaultNetwork !== "hardhat") {
       console.log("☢️ WARNING: No mnemonic file created for a deploy account. Try `yarn run generate` and then `yarn run account`.")
     }
   }
@@ -121,7 +123,13 @@ const config: HardhatUserConfig = {
     // Your API key for Etherscan
     // Obtain one at https://etherscan.io/
     apiKey: "PSW8C433Q667DVEX5BCRMGNAH9FSGFZ7Q8"
-  }
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS ? true : false,
+  },
+  namedAccounts: {
+    deployer: 0,
+  },
 };
 
 const DEBUG = false;
