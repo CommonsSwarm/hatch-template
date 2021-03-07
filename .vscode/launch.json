@@ -6,8 +6,17 @@
       "request": "launch",
       "name": "hardhat test",
       "skipFiles": ["<node_internals>/**"],
-      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/hardhat",
+      "runtimeExecutable": "${workspaceFolder}/packages/hardhat/node_modules/.bin/hardhat",
       "args": ["test"],
+      "cwd": "${workspaceFolder}/packages/hardhat"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "hardhat run",
+      "skipFiles": ["<node_internals>/**"],
+      "runtimeExecutable": "${workspaceFolder}/packages/hardhat/node_modules/.bin/hardhat",
+      "args": ["run", "./scripts/new-hatch.ts"],
       "cwd": "${workspaceFolder}/packages/hardhat"
     }
   ]
