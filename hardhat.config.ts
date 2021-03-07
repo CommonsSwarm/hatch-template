@@ -51,6 +51,15 @@ const config: HardhatUserConfig = {
   // (you will need to restart the `yarn run start` dev server after editing the .env)
 
   networks: {
+    hardhat: {
+      gas: 7.9e6,
+      gasPrice: 5000000001,
+      allowUnlimitedContractSize: true,
+      forking: {
+        url: "https://xdai-archive.blockscout.com",
+        blockNumber: 14890853,
+      },
+    },
     localhost: {
       url: "http://localhost:8545",
       /*
