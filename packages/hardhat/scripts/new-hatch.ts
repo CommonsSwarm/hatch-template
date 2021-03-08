@@ -1,5 +1,8 @@
+import { Contract } from "@ethersproject/contracts";
 import hre, { ethers } from "hardhat";
 import { HatchTemplate } from "../typechain";
+
+const { deployments } = hre;
 
 const DAO_ID = "testtec" + Math.random(); // Note this must be unique for each deployment, change it for subsequent deployments
 const NETWORK_ARG = "--network";
@@ -11,7 +14,7 @@ const argValue = (arg, defaultValue) =>
 const network = () => argValue(NETWORK_ARG, "local");
 const daoId = () => argValue(DAO_ID_ARG, DAO_ID);
 
-const hatchTemplateAddress = () => "0xccFb241FF70B7D6c685B0869583e22052E175F27";
+const hatchTemplateAddress = async () => (await deployments.get("HatchTemplate")).address;
 
 // Helpers, no need to change
 const HOURS = 60 * 60;
@@ -81,6 +84,19 @@ const MAX_IH_RATE = 1;
 // How much will we need to raise to reach 1/2 of the MAX_IH_RATE divided by total IH
 const EXPECTED_RAISE_PER_IH = 0.012 * ONE_TOKEN;
 
+async function getAddress(selectedFilter: string, contract: Contract, transactionHash: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const filter = contract.filters[selectedFilter]();
+
+    contract.on(filter, (contractAddress, event) => {
+      if (event.transactionHash === transactionHash) {
+        contract.removeAllListeners();
+        resolve(contractAddress);
+      }
+    });
+  });
+}
+
 async function main() {
   // Hardhat always runs the compile task when running scripts with its command
   // line interface.
@@ -94,7 +110,7 @@ async function main() {
 
   const hatchTemplate = (await ethers.getContractAt(
     "HatchTemplate",
-    hatchTemplateAddress(),
+    await hatchTemplateAddress(),
     signers[0]
   )) as HatchTemplate;
 
@@ -110,42 +126,43 @@ async function main() {
     ],
     COLLATERAL_TOKEN
   );
-
   const createDaoTxOneReceipt = await transactionOne.wait();
 
-  const deployDaoInterface = new hre.ethers.utils.Interface(["event DeployDao(address)"]);
+  // Filter and get the org address from the events.
+  const orgAddress = await getAddress("DeployDao", hatchTemplate, transactionOne.hash);
 
-  const { args } = createDaoTxOneReceipt.logs
-    .map((log) => deployDaoInterface.parseLog(log))
-    .find(({ name }) => name === "DeployDao");
+  console.log(`Tx One Complete. DAO address: ${orgAddress} Gas used: ${createDaoTxOneReceipt.gasUsed} `);
 
-  console.log(`Tx One Complete. DAO address: ${args[0]} Gas used: ${createDaoTxOneReceipt.gasUsed} `);
+  const transactionTwo = await hatchTemplate.createDaoTxTwo(
+    HATCH_MIN_GOAL.toString(),
+    HATCH_MAX_GOAL.toString(),
+    HATCH_PERIOD.toString(),
+    HATCH_EXCHANGE_RATE.toString(),
+    VESTING_CLIFF_PERIOD.toString(),
+    VESTING_COMPLETE_PERIOD.toString(),
+    HATCH_PERCENT_FUNDING_FOR_BENEFICIARY.toString(),
+    OPEN_DATE.toString(),
+    IH_TOKEN.toString(),
+    MAX_IH_RATE.toString(),
+    EXPECTED_RAISE_PER_IH.toString()
+  );
+  const createDaoTxTwoReceipt = await transactionTwo.wait();
 
-  // const createDaoTxTwoReceipt = await hatchTemplate.createDaoTxTwo(
-  //   HATCH_MIN_GOAL,
-  //   HATCH_MAX_GOAL,
-  //   HATCH_PERIOD,
-  //   HATCH_EXCHANGE_RATE,
-  //   VESTING_CLIFF_PERIOD,
-  //   VESTING_COMPLETE_PERIOD,
-  //   HATCH_PERCENT_FUNDING_FOR_BENEFICIARY,
-  //   OPEN_DATE,
-  //   IH_TOKEN,
-  //   MAX_IH_RATE,
-  //   EXPECTED_RAISE_PER_IH
-  // );
-  // console.log(`Tx Two Complete. Gas used: ${createDaoTxTwoReceipt.receipt.gasUsed}`);
+  console.log(`Tx Two Complete. Gas used: ${createDaoTxTwoReceipt.gasUsed}`);
 
-  // const createDaoTxThreeReceipt = await hatchTemplate.createDaoTxThree(
-  //   daoId(),
-  //   [COLLATERAL_TOKEN],
-  //   COLLATERAL_TOKEN,
-  //   TOLLGATE_FEE,
-  //   SCORE_TOKEN,
-  //   HATCH_ORACLE_RATIO
-  // );
-  // console.log(`Tx Three Complete. Gas used: ${createDaoTxThreeReceipt.receipt.gasUsed}`);
+  const transactionThree = await hatchTemplate.createDaoTxThree(
+    daoId(),
+    [COLLATERAL_TOKEN],
+    COLLATERAL_TOKEN,
+    TOLLGATE_FEE.toString(),
+    SCORE_TOKEN,
+    HATCH_ORACLE_RATIO.toString()
+  );
+  const createDaoTxThreeReceipt = await transactionThree.wait();
+
+  console.log(`Tx Three Complete. Gas used: ${createDaoTxThreeReceipt.gasUsed}`);
 }
+
 // We recommend this pattern to be able to use async/await everywhere
 // and properly handle errors.
 main()
