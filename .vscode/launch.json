@@ -7,7 +7,7 @@
       "name": "hardhat test",
       "skipFiles": ["<node_internals>/**"],
       "runtimeExecutable": "${workspaceFolder}/packages/hardhat/node_modules/.bin/hardhat",
-      "args": ["test"],
+      "args": ["test", "--network", "localhost"],
       "cwd": "${workspaceFolder}/packages/hardhat"
     },
     {

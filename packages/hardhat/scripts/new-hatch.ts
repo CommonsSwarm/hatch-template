@@ -3,6 +3,7 @@ import hre, { ethers } from "hardhat";
 import { HatchTemplate } from "../typechain";
 
 const { deployments } = hre;
+const { BigNumber } = ethers;
 
 const DAO_ID = "testtec" + Math.random(); // Note this must be unique for each deployment, change it for subsequent deployments
 const NETWORK_ARG = "--network";
@@ -20,9 +21,9 @@ const hatchTemplateAddress = async () => (await deployments.get("HatchTemplate")
 const HOURS = 60 * 60;
 const DAYS = 24 * HOURS;
 const ONE_HUNDRED_PERCENT = 1e18;
-const ONE_TOKEN = 1e18;
+const ONE_TOKEN = BigNumber.from((1e18).toString());
 const FUNDRAISING_ONE_HUNDRED_PERCENT = 1e6;
-const FUNDRAISING_ONE_TOKEN = 1e18;
+const FUNDRAISING_ONE_TOKEN = BigNumber.from((1e18).toString());
 const PPM = 1000000;
 
 const BLOCKTIME = network() === "rinkeby" ? 15 : network() === "mainnet" ? 13 : 5; // 15 rinkeby, 13 mainnet, 5 xdai
@@ -41,37 +42,41 @@ const ORG_TOKEN_SYMBOL = "TESTTECH";
 
 // Score membership token is used to check how much members can contribute to the hatch
 const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
-const SCORE_ONE_TOKEN = 1;
+const SCORE_ONE_TOKEN = BigNumber.from(1);
 // Ratio contribution tokens allowed per score membership token
-const HATCH_ORACLE_RATIO = (0.005 * PPM * FUNDRAISING_ONE_TOKEN) / SCORE_ONE_TOKEN;
+const HATCH_ORACLE_RATIO = BigNumber.from(0.005 * PPM)
+  .mul(FUNDRAISING_ONE_TOKEN)
+  .div(SCORE_ONE_TOKEN);
 
 // # Dandelion Voting Settings
 
 // Used for administrative or binary choice decisions with ragequit-like functionality
-const SUPPORT_REQUIRED = 0.6 * ONE_HUNDRED_PERCENT;
-const MIN_ACCEPTANCE_QUORUM = 0.02 * ONE_HUNDRED_PERCENT;
+const SUPPORT_REQUIRED = String(0.6 * ONE_HUNDRED_PERCENT);
+const MIN_ACCEPTANCE_QUORUM = String(0.02 * ONE_HUNDRED_PERCENT);
 const VOTE_DURATION_BLOCKS = (3 * DAYS) / BLOCKTIME;
 const VOTE_BUFFER_BLOCKS = (8 * HOURS) / BLOCKTIME;
 const VOTE_EXECUTION_DELAY_BLOCKS = (24 * HOURS) / BLOCKTIME;
 // Set the fee paid to the org to create an administrative vote
-const TOLLGATE_FEE = 3 * ONE_TOKEN;
+const TOLLGATE_FEE = BigNumber.from(3).mul(ONE_TOKEN);
 
 // # Hatch settings
 
 // How many COLLATERAL_TOKEN's are required to Hatch
-const HATCH_MIN_GOAL = 5 * ONE_TOKEN;
+const HATCH_MIN_GOAL = BigNumber.from(5).mul(ONE_TOKEN);
 // What is the Max number of COLLATERAL_TOKEN's the Hatch can recieve
-const HATCH_MAX_GOAL = 1000 * ONE_TOKEN;
+const HATCH_MAX_GOAL = BigNumber.from(1000).mul(ONE_TOKEN);
 // How long should the hatch period last
 const HATCH_PERIOD = 15 * DAYS;
 // How many organization tokens should be minted per collateral token
-const HATCH_EXCHANGE_RATE = (10000 * PPM * ONE_TOKEN) / FUNDRAISING_ONE_TOKEN;
+const HATCH_EXCHANGE_RATE = BigNumber.from(10000 * PPM)
+  .mul(ONE_TOKEN)
+  .div(FUNDRAISING_ONE_TOKEN);
 // When does the cliff for vesting restrictions end
 const VESTING_CLIFF_PERIOD = HATCH_PERIOD + 1; // 1 second after hatch
 // When will the Hatchers be fully vested and able to use the redemptions app
 const VESTING_COMPLETE_PERIOD = VESTING_CLIFF_PERIOD + 1; // 2 seconds after hatch
 // What percentage of Hatch contributions should go to the Funding Pool and therefore be non refundable
-const HATCH_PERCENT_FUNDING_FOR_BENEFICIARY = 0.05 * FUNDRAISING_ONE_HUNDRED_PERCENT;
+const HATCH_TRIBUTE = 0.05 * FUNDRAISING_ONE_HUNDRED_PERCENT;
 // when should the Hatch open, setting 0 will allow anyone to open the Hatch anytime after deployment
 const OPEN_DATE = 0;
 
@@ -82,7 +87,9 @@ const IH_TOKEN = "0xdf2c3c8764a92eb43d2eea0a4c2d77c2306b0835";
 // Max theoretical rate per impact hour in Collateral_token per IH
 const MAX_IH_RATE = 1;
 // How much will we need to raise to reach 1/2 of the MAX_IH_RATE divided by total IH
-const EXPECTED_RAISE_PER_IH = 0.012 * ONE_TOKEN;
+const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
+  .mul(ONE_TOKEN)
+  .div(1000);
 
 async function getAddress(selectedFilter: string, contract: Contract, transactionHash: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -97,14 +104,7 @@ async function getAddress(selectedFilter: string, contract: Contract, transactio
   });
 }
 
-async function main() {
-  // Hardhat always runs the compile task when running scripts with its command
-  // line interface.
-  //
-  // If this script is run directly using `node` you may want to call compile
-  // manually to make sure everything is compiled
-  // await hre.run('compile');
-
+export default async function main() {
   // We get the contract to deploy
   const signers = await ethers.getSigners();
 
@@ -117,34 +117,28 @@ async function main() {
   const transactionOne = await hatchTemplate.createDaoTxOne(
     ORG_TOKEN_NAME,
     ORG_TOKEN_SYMBOL,
-    [
-      SUPPORT_REQUIRED.toString(),
-      MIN_ACCEPTANCE_QUORUM.toString(),
-      VOTE_DURATION_BLOCKS.toString(),
-      VOTE_BUFFER_BLOCKS.toString(),
-      VOTE_EXECUTION_DELAY_BLOCKS.toString(),
-    ],
+    [SUPPORT_REQUIRED, MIN_ACCEPTANCE_QUORUM, VOTE_DURATION_BLOCKS, VOTE_BUFFER_BLOCKS, VOTE_EXECUTION_DELAY_BLOCKS],
     COLLATERAL_TOKEN
   );
   const createDaoTxOneReceipt = await transactionOne.wait();
 
   // Filter and get the org address from the events.
-  const orgAddress = await getAddress("DeployDao", hatchTemplate, transactionOne.hash);
+  const daoAddress = await getAddress("DeployDao", hatchTemplate, transactionOne.hash);
 
-  console.log(`Tx One Complete. DAO address: ${orgAddress} Gas used: ${createDaoTxOneReceipt.gasUsed} `);
+  console.log(`Tx One Complete. DAO address: ${daoAddress} Gas used: ${createDaoTxOneReceipt.gasUsed} `);
 
   const transactionTwo = await hatchTemplate.createDaoTxTwo(
-    HATCH_MIN_GOAL.toString(),
-    HATCH_MAX_GOAL.toString(),
-    HATCH_PERIOD.toString(),
-    HATCH_EXCHANGE_RATE.toString(),
-    VESTING_CLIFF_PERIOD.toString(),
-    VESTING_COMPLETE_PERIOD.toString(),
-    HATCH_PERCENT_FUNDING_FOR_BENEFICIARY.toString(),
-    OPEN_DATE.toString(),
-    IH_TOKEN.toString(),
-    MAX_IH_RATE.toString(),
-    EXPECTED_RAISE_PER_IH.toString()
+    HATCH_MIN_GOAL,
+    HATCH_MAX_GOAL,
+    HATCH_PERIOD,
+    HATCH_EXCHANGE_RATE,
+    VESTING_CLIFF_PERIOD,
+    VESTING_COMPLETE_PERIOD,
+    HATCH_TRIBUTE,
+    OPEN_DATE,
+    IH_TOKEN,
+    MAX_IH_RATE,
+    EXPECTED_RAISE_PER_IH
   );
   const createDaoTxTwoReceipt = await transactionTwo.wait();
 
@@ -154,13 +148,15 @@ async function main() {
     daoId(),
     [COLLATERAL_TOKEN],
     COLLATERAL_TOKEN,
-    TOLLGATE_FEE.toString(),
+    TOLLGATE_FEE,
     SCORE_TOKEN,
-    HATCH_ORACLE_RATIO.toString()
+    HATCH_ORACLE_RATIO
   );
   const createDaoTxThreeReceipt = await transactionThree.wait();
 
   console.log(`Tx Three Complete. Gas used: ${createDaoTxThreeReceipt.gasUsed}`);
+
+  return daoAddress;
 }
 
 // We recommend this pattern to be able to use async/await everywhere
