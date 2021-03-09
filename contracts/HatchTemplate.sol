@@ -357,7 +357,6 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         acl.createPermission(ANY_ENTITY, hatch, hatch.OPEN_ROLE(), dandelionVoting);
         acl.createPermission(ANY_ENTITY, hatch, hatch.CONTRIBUTE_ROLE(), this);
         acl.createPermission(ANY_ENTITY, hatch, hatch.CLOSE_ROLE(), this);
-        // LOG here to check Oracle
         _setOracle(acl, ANY_ENTITY, hatch, hatch.CONTRIBUTE_ROLE(), senderStoredAddresses[msg.sender].hatchOracle);
         _setOracle(acl, ANY_ENTITY, hatch, hatch.CLOSE_ROLE(), senderStoredAddresses[msg.sender].impactHours);
         acl.setPermissionManager(dandelionVoting, hatch, hatch.CONTRIBUTE_ROLE());

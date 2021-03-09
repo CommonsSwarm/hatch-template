@@ -22,5 +22,9 @@ contract IHatch {
         uint64                       _openDate
     ) external;
 
+    function open() external;
+
+    function contribute(uint256 _value) external;
+
     function close() external;
 }

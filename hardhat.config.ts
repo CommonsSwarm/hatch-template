@@ -50,11 +50,51 @@ const config: HardhatUserConfig = {
   // (then your frontend will talk to your contracts on the live network!)
   // (you will need to restart the `yarn run start` dev server after editing the .env)
 
+  solidity: {
+    compilers: [
+      {
+        version: "0.4.24",
+      },
+      {
+        version: "0.7.6",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
+    ],
+  },
+  mocha: {
+    timeout: 0,
+  },
+  typechain: {
+    outDir: "typechain",
+    target: "ethers-v5",
+  },
+  etherscan: {
+    // Your API key for Etherscan
+    // Obtain one at https://etherscan.io/
+    apiKey: "PSW8C433Q667DVEX5BCRMGNAH9FSGFZ7Q8",
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS ? true : false,
+  },
+  namedAccounts: {
+    deployer: 0,
+  },
+  tenderly: {
+    project: process.env.TENDERLY_PROJECT || "",
+    username: process.env.TENDERLY_USERNAME || "",
+  },
   networks: {
     hardhat: {
-      gas: 7.9e6,
-      gasPrice: 5000000001,
+      gas: 12450000,
+      gasPrice: 8000000000,
       allowUnlimitedContractSize: true,
+      throwOnTransactionFailures: false,
+      throwOnCallFailures: false,
       forking: {
         url: "https://xdai-archive.blockscout.com",
         blockNumber: 14890853,
@@ -115,33 +155,6 @@ const config: HardhatUserConfig = {
         mnemonic: mnemonic(),
       },
     },
-  },
-  solidity: {
-    compilers: [
-      {
-        version: "0.4.24",
-      },
-      {
-        version: "0.7.6",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
-        },
-      },
-    ],
-  },
-  etherscan: {
-    // Your API key for Etherscan
-    // Obtain one at https://etherscan.io/
-    apiKey: "PSW8C433Q667DVEX5BCRMGNAH9FSGFZ7Q8",
-  },
-  gasReporter: {
-    enabled: process.env.REPORT_GAS ? true : false,
-  },
-  namedAccounts: {
-    deployer: 0,
   },
 };
 
