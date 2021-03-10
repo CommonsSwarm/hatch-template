@@ -1,6 +1,6 @@
 import { Contract } from "@ethersproject/contracts";
 import hre, { ethers } from "hardhat";
-import { HatchTemplate } from "../typechain";
+import { HatchTemplate, Kernel } from "../typechain";
 
 const { deployments } = hre;
 const { BigNumber } = ethers;
@@ -32,7 +32,7 @@ console.log(`Every ${BLOCKTIME}s a new block is mined in ${network()}.`);
 // CONFIGURATION
 
 // Collateral Token is used to pay contributors and held in the bonding curve reserve
-const COLLATERAL_TOKEN = "0xfb8f60246d56905866e12443ec0836ebfb3e1f2e"; // tDAI
+export const COLLATERAL_TOKEN = "0xfb8f60246d56905866e12443ec0836ebfb3e1f2e"; // tDAI
 
 // Org Token represents membership in the community and influence in proposals
 const ORG_TOKEN_NAME = "Token Engineering Commons TEST Hatch Token";
@@ -41,7 +41,7 @@ const ORG_TOKEN_SYMBOL = "TESTTECH";
 // # Hatch Oracle Settings
 
 // Score membership token is used to check how much members can contribute to the hatch
-const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
+export const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
 const SCORE_ONE_TOKEN = BigNumber.from(1);
 // Ratio contribution tokens allowed per score membership token
 const HATCH_ORACLE_RATIO = BigNumber.from(0.005 * PPM)
@@ -91,13 +91,31 @@ const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
   .mul(ONE_TOKEN)
   .div(1000);
 
+async function getAppAddresses(dao: Kernel, ensNames: string[]): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const inputAppIds = ensNames.map(ethers.utils.namehash);
+    const proxies:string[] = [];
+
+    dao.on("NewAppProxy", (proxy, isUpgradeable, appId, event) => {
+      const index = inputAppIds.indexOf(appId);
+      if (index >= 0) {
+        proxies[index] = proxy;
+      }
+      if (proxies.length === ensNames.length) {
+        dao.removeAllListeners("NewAppProxy");
+        resolve(proxies);
+      }
+    });
+  });
+}
+
 async function getAddress(selectedFilter: string, contract: Contract, transactionHash: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const filter = contract.filters[selectedFilter]();
 
     contract.on(filter, (contractAddress, event) => {
       if (event.transactionHash === transactionHash) {
-        contract.removeAllListeners();
+        contract.removeAllListeners(filter);
         resolve(contractAddress);
       }
     });
@@ -125,7 +143,7 @@ export default async function main() {
   // Filter and get the org address from the events.
   const daoAddress = await getAddress("DeployDao", hatchTemplate, transactionOne.hash);
 
-  console.log(`Tx One Complete. DAO address: ${daoAddress} Gas used: ${createDaoTxOneReceipt.gasUsed} `);
+  console.log(`Tx One Complete. DAO address: ${daoAddress}. Gas used: ${createDaoTxOneReceipt.gasUsed} `);
 
   const transactionTwo = await hatchTemplate.createDaoTxTwo(
     HATCH_MIN_GOAL,
@@ -142,7 +160,13 @@ export default async function main() {
   );
   const createDaoTxTwoReceipt = await transactionTwo.wait();
 
-  console.log(`Tx Two Complete. Gas used: ${createDaoTxTwoReceipt.gasUsed}`);
+  const dao = (await ethers.getContractAt("Kernel", daoAddress)) as Kernel;
+  const [hatchAddress, impactHoursAddress] = await getAppAddresses(dao, [
+    "marketplace-hatch.open.aragonpm.eth",
+    "impact-hours-beta.open.aragonpm.eth"
+  ]);
+
+  console.log(`Tx Two Complete. Hatch address: ${hatchAddress}. Gas used: ${createDaoTxTwoReceipt.gasUsed}`);
 
   const transactionThree = await hatchTemplate.createDaoTxThree(
     daoId(),
@@ -156,7 +180,7 @@ export default async function main() {
 
   console.log(`Tx Three Complete. Gas used: ${createDaoTxThreeReceipt.gasUsed}`);
 
-  return daoAddress;
+  return [daoAddress, hatchAddress, impactHoursAddress];
 }
 
 // We recommend this pattern to be able to use async/await everywhere
