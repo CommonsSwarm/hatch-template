@@ -32,7 +32,7 @@ console.log(`Every ${BLOCKTIME}s a new block is mined in ${network()}.`);
 // CONFIGURATION
 
 // Collateral Token is used to pay contributors and held in the bonding curve reserve
-export const COLLATERAL_TOKEN = "0xfb8f60246d56905866e12443ec0836ebfb3e1f2e"; // tDAI
+const COLLATERAL_TOKEN = "0xfb8f60246d56905866e12443ec0836ebfb3e1f2e"; // tDAI
 
 // Org Token represents membership in the community and influence in proposals
 const ORG_TOKEN_NAME = "Token Engineering Commons TEST Hatch Token";
@@ -41,10 +41,10 @@ const ORG_TOKEN_SYMBOL = "TESTTECH";
 // # Hatch Oracle Settings
 
 // Score membership token is used to check how much members can contribute to the hatch
-export const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
+const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
 const SCORE_ONE_TOKEN = BigNumber.from(1);
 // Ratio contribution tokens allowed per score membership token
-const HATCH_ORACLE_RATIO = BigNumber.from(0.005 * PPM)
+const HATCH_ORACLE_RATIO = BigNumber.from(0.8 * PPM)
   .mul(FUNDRAISING_ONE_TOKEN)
   .div(SCORE_ONE_TOKEN);
 
@@ -94,7 +94,7 @@ const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
 async function getAppAddresses(dao: Kernel, ensNames: string[]): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const inputAppIds = ensNames.map(ethers.utils.namehash);
-    const proxies:string[] = [];
+    const proxies: string[] = [];
 
     dao.on("NewAppProxy", (proxy, isUpgradeable, appId, event) => {
       const index = inputAppIds.indexOf(appId);
@@ -163,7 +163,7 @@ export default async function main() {
   const dao = (await ethers.getContractAt("Kernel", daoAddress)) as Kernel;
   const [hatchAddress, impactHoursAddress] = await getAppAddresses(dao, [
     "marketplace-hatch.open.aragonpm.eth",
-    "impact-hours-beta.open.aragonpm.eth"
+    "impact-hours-beta.open.aragonpm.eth",
   ]);
 
   console.log(`Tx Two Complete. Hatch address: ${hatchAddress}. Gas used: ${createDaoTxTwoReceipt.gasUsed}`);
@@ -179,6 +179,8 @@ export default async function main() {
   const createDaoTxThreeReceipt = await transactionThree.wait();
 
   console.log(`Tx Three Complete. Gas used: ${createDaoTxThreeReceipt.gasUsed}`);
+
+  const [hatchOracleAddress] = await getAppAddresses(dao, ["hatch-oracle.open.aragonpm.eth"]);
 
   return [daoAddress, hatchAddress, impactHoursAddress];
 }
