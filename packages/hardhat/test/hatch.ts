@@ -8,7 +8,6 @@ import newHatch from "../scripts/new-hatch";
 import { impersonateAddress } from "../helpers/rpc";
 import { Kernel, IHatch, IImpactHours, ERC20, MiniMeToken } from "../typechain";
 import { BigNumber } from "@ethersproject/bignumber";
-import { Console, log } from "console";
 
 use(solidity);
 
