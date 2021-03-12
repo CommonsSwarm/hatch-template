@@ -85,16 +85,14 @@ const config: HardhatUserConfig = {
     deployer: 0,
   },
   tenderly: {
-    project: process.env.TENDERLY_PROJECT || "",
-    username: process.env.TENDERLY_USERNAME || "",
+    project: process.env.TENDERLY_PROJECT || "hatch-template",
+    username: process.env.TENDERLY_USERNAME || "PJColombo",
   },
   networks: {
     hardhat: {
       gas: 12450000,
       gasPrice: 8000000000,
       allowUnlimitedContractSize: true,
-      throwOnTransactionFailures: false,
-      throwOnCallFailures: false,
       forking: {
         url: "https://xdai-archive.blockscout.com",
         blockNumber: 14890853,
@@ -103,6 +101,7 @@ const config: HardhatUserConfig = {
     localhost: {
       url: "http://localhost:8545",
       timeout: 0,
+      gasPrice: 1000000000,
       /*
         notice no mnemonic here? it will just use account 0 of the hardhat node to deploy
         (you can put in a mnemonic here to set the deployer locally)
