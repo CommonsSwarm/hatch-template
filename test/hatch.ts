@@ -1,118 +1,143 @@
 import { Signer } from "@ethersproject/abstract-signer";
 import { ethers } from "hardhat";
-import { use, expect } from "chai";
+import { use, assert } from "chai";
+import { getContributors, log } from "./helpers/helpers";
 import { solidity } from "ethereum-waffle";
-import fetch from "node-fetch";
+import { assertBn } from "@aragon/contract-helpers-test/src/asserts";
 
 import newHatch from "../scripts/new-hatch";
 import { impersonateAddress } from "../helpers/rpc";
 import { Kernel, IHatch, IImpactHours, ERC20, MiniMeToken } from "../typechain";
 import { BigNumber } from "@ethersproject/bignumber";
+import { getStateByKey, STATE_CLOSED, STATE_FUNDING, STATE_GOAL_REACHED } from "./helpers/hatch-states";
+import { HATCH_ERRORS, IMPACT_HOURS_ERRORS, TOKEN_ERRORS } from "./helpers/errors";
+import { calculateRewards } from "./helpers/helpers";
 
 use(solidity);
 
 // There are multiple ERC20 paths. We need to specify one.
 const ERC20Path = "@aragon/os/contracts/lib/token/ERC20.sol:ERC20";
 const HATCH_USER = "0xDc2aDfA800a1ffA16078Ef8C1F251D50DcDa1065";
-const CONTRIBUTORS_PROCESSED_PER_TRANSACTION = 10;
-const TOKEN_DECIMALS = 1e18;
+const MIN_NEGLIGIBLE_AMOUNT = ethers.BigNumber.from(String("10000000"));
 
-async function getContributors(tokenAddress) {
-  return fetch("https://api.thegraph.com/subgraphs/name/aragon/aragon-tokens-xdai", {
-    method: "POST",
-    body: JSON.stringify({
-      query: `
-          {
-            tokenHolders(first: 1000 where : { tokenAddress: "${tokenAddress}"}) {
-              address
-            }
-          }
-        `,
-    }),
-  })
-    .then((res) => res.json())
-    .then((res) => res.data.tokenHolders.map(({ address }) => address));
+async function claimRewards(impactHours: IImpactHours, impactHoursTokenAddress: string): Promise<void> {
+  const CONTRIBUTORS_PROCESSED_PER_TRANSACTION = 10;
+  const contributors = await getContributors(impactHoursTokenAddress);
+  const total = Math.ceil(contributors.length / CONTRIBUTORS_PROCESSED_PER_TRANSACTION);
+  let counter = 1;
+  let tx;
+
+  for (let i = 0; i < contributors.length; i += CONTRIBUTORS_PROCESSED_PER_TRANSACTION) {
+    // Claim rewards might get too expensive so we set gasPrice to 1
+    tx = await impactHours.claimReward(contributors.slice(i, i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION), {
+      gasPrice: 1,
+    });
+
+    await tx.wait();
+
+    log(
+      `Tx ${counter++} of ${total}: Rewards claimed for IH token holders ${i + 1} to ${Math.min(
+        i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION,
+        contributors.length
+      )}.`,
+      10
+    );
+  }
 }
 
-describe.only("Hatch Template", function () {
+describe("Hatch Flow", function () {
   let hatchUser: Signer;
   let dao: Kernel;
   let hatch: IHatch;
   let impactHours: IImpactHours;
   let contributionToken: ERC20;
-  let ihTokenAddress: string;
+  let hatchToken: ERC20;
+  let impactHoursClonedToken: ERC20;
+  let impactHoursTokenAddress: string;
 
   before(async () => {
     const [daoAddress, hatchAddress, impactHoursAddress] = await newHatch();
-
-    console.log("DAO created using Hatch Template");
 
     hatchUser = await impersonateAddress(HATCH_USER);
     dao = (await ethers.getContractAt("Kernel", daoAddress)) as Kernel;
     hatch = (await ethers.getContractAt("IHatch", hatchAddress, hatchUser)) as IHatch;
     impactHours = (await ethers.getContractAt("IImpactHours", impactHoursAddress, hatchUser)) as IImpactHours;
-    const contributionTokenAddress = await hatch.contributionToken();
-    contributionToken = (await ethers.getContractAt(ERC20Path, contributionTokenAddress, hatchUser)) as ERC20;
-    const ihClonedTokenAddress = await impactHours.token();
-    const ihClonedToken = (await ethers.getContractAt("MiniMeToken", ihClonedTokenAddress, hatchUser)) as MiniMeToken;
-    ihTokenAddress = await ihClonedToken.parentToken();
+    contributionToken = (await ethers.getContractAt(ERC20Path, await hatch.contributionToken(), hatchUser)) as ERC20;
+    hatchToken = (await ethers.getContractAt(ERC20Path, await hatch.token(), hatchUser)) as ERC20;
+    impactHoursClonedToken = (await ethers.getContractAt(
+      "MiniMeToken",
+      await impactHours.token(),
+      hatchUser
+    )) as MiniMeToken;
+    impactHoursTokenAddress = await impactHoursClonedToken.parentToken();
   });
 
-  describe("Test General Flow", async function () {
-    it("Test Hatch Flow when max goal is reached", async function () {
-      let tx,
-        txReceipt,
-        totalGasUsed = BigNumber.from("0");
+  context("When max goal is reached", async () => {
+    it("opens the hatch", async function () {
+      const tx = await hatch.open();
 
-      tx = await hatch.open();
-      txReceipt = await tx.wait();
+      await tx.wait();
 
-      console.log(`Hatch Opened. Gas used: ${txReceipt.gasUsed}`);
-      totalGasUsed = totalGasUsed.add(txReceipt.gasUsed);
+      assert.strictEqual(getStateByKey(await hatch.state()), STATE_FUNDING, HATCH_ERRORS.ERROR_HATCH_NOT_OPENED);
+    });
 
-      const contributionAmount = BigNumber.from("1000").mul(String(TOKEN_DECIMALS));
+    it("contributes with a max goal amount to the hatch", async () => {
+      let tx;
+      const maxGoalContribution = await hatch.maxGoal();
 
-      tx = await contributionToken.approve(hatch.address, contributionAmount);
-      txReceipt = await tx.wait();
+      tx = await contributionToken.approve(hatch.address, maxGoalContribution);
 
-      console.log(`Contribution amount approved. Gas used: ${txReceipt.gasUsed}`);
-      totalGasUsed = totalGasUsed.add(txReceipt.gasUsed);
+      await tx.wait();
 
-      tx = await hatch.contribute(contributionAmount);
-      txReceipt = await tx.wait();
+      assertBn(
+        await contributionToken.allowance(HATCH_USER, hatch.address),
+        maxGoalContribution,
+        TOKEN_ERRORS.ERROR_APPROVAL_MISMATCH
+      );
 
-      console.log(`Contribution amount ${contributionAmount} made by ${HATCH_USER}. Gas used: ${txReceipt.gasUsed}`);
-      totalGasUsed = totalGasUsed.add(txReceipt.gasUsed);
+      tx = await hatch.contribute(maxGoalContribution);
 
-      const contributors = await getContributors(ihTokenAddress);
+      await tx.wait();
 
-      console.log("IH token holders fetched");
+      assertBn(
+        await contributionToken.balanceOf(hatch.address),
+        maxGoalContribution,
+        HATCH_ERRORS.ERROR_CONTRIBUTION_NOT_MADE
+      );
 
-      const total = Math.ceil(contributors.length / CONTRIBUTORS_PROCESSED_PER_TRANSACTION);
-      let counter = 1;
+      assert.equal(getStateByKey(await hatch.state()), STATE_GOAL_REACHED, HATCH_ERRORS.ERROR_HATCH_GOAL_NOT_REACHED);
+    });
 
-      for (let i = 0; i < contributors.length; i += CONTRIBUTORS_PROCESSED_PER_TRANSACTION) {
-        tx = await impactHours.claimReward(contributors.slice(i, i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION), {
-          gasPrice: 1,
-        });
-        txReceipt = await tx.wait();
+    it("claims the impact hours for all contributors", async () => {
+      const totalRaised = await hatch.totalRaised();
+      const totalIH = await impactHoursClonedToken.totalSupply();
+      const totalIHRewards = await calculateRewards(impactHours, totalRaised, totalIH);
+      const expectedHatchTokens = await hatch.contributionToTokens(totalIHRewards);
+      const hatchTokenTotalSupply = await hatchToken.totalSupply();
 
-        console.log(
-          `Rewards claimed for IH token holders ${i + 1} to ${Math.min(
-            i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION,
-            contributors.length
-          )}. Tx ${counter++} of ${total}. Gas fee: ${txReceipt.gasUsed}`
-        );
-        totalGasUsed = totalGasUsed.add(txReceipt.gasUsed);
-      }
+      await claimRewards(impactHours, impactHoursTokenAddress);
 
-      tx = await hatch.close();
-      txReceipt = await tx.wait();
+      assert.isTrue(
+        hatchTokenTotalSupply
+          .add(expectedHatchTokens)
+          .sub(await hatchToken.totalSupply())
+          .lt(MIN_NEGLIGIBLE_AMOUNT),
+        IMPACT_HOURS_ERRORS.ERROR_CLAIMED_REWARDS_MISMATCH
+      );
 
-      console.log(`Hatch closed. Gas used: ${txReceipt.gasUsed}`);
-      totalGasUsed = totalGasUsed.add(txReceipt.gasUsed);
+      assertBn(
+        await impactHoursClonedToken.totalSupply(),
+        BigNumber.from(0),
+        IMPACT_HOURS_ERRORS.ERROR_ALL_TOKENS_NOT_DESTROYED
+      );
+    });
 
-      console.log(`Total gas used: ${totalGasUsed.toString()}`);
+    it("closes the hatch", async () => {
+      const tx = await impactHours.closeHatch();
+
+      await tx.wait();
+
+      assert.equal(getStateByKey(await hatch.state()), STATE_CLOSED, HATCH_ERRORS.ERROR_HATCH_NOT_CLOSED);
     });
   });
 });
