@@ -95,7 +95,7 @@ const config: HardhatUserConfig = {
       allowUnlimitedContractSize: true,
       forking: {
         url: "https://xdai-archive.blockscout.com",
-        blockNumber: 14890853,
+        blockNumber: 15005513,
       },
     },
     localhost: {
