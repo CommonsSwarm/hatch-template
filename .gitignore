@@ -13,6 +13,7 @@ packages/hardhat/cache
 packages/hardhat/typechain
 packages/hardhat/coverage/
 packages/hardhat/coverage.json
+packages/hardhat/package-lock.json
 
 docker/**/data
 
