@@ -132,7 +132,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         senderStoredAddresses[msg.sender].impactHours = _installImpactHours(senderStoredAddresses[msg.sender].dao, _ihToken, _hatch, _maxIHRate, _expectedRaise);
 
         _createHookedTokenManagerPermissions();
-        senderStoredAddresses[msg.sender].acl.createPermission(ANY_ENTITY, senderStoredAddresses[msg.sender].impactHours, senderStoredAddresses[msg.sender].impactHours.CLOSE_ROLE(), address(this));
+        senderStoredAddresses[msg.sender].acl.createPermission(ANY_ENTITY, senderStoredAddresses[msg.sender].impactHours, senderStoredAddresses[msg.sender].impactHours.CLOSE_HATCH_ROLE(), address(this));
     }
 
     /**
