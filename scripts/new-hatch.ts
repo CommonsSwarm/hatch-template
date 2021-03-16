@@ -1,10 +1,22 @@
-import { Contract } from "@ethersproject/contracts";
 import hre, { ethers } from "hardhat";
-import { HatchTemplate, Kernel, MiniMeToken } from "../typechain";
-import { log } from "../test/helpers/helpers";
+import { Contract } from "@ethersproject/contracts";
+import { Signer } from "@ethersproject/abstract-signer";
+import { ERC20, HatchTemplate, IHatch, IImpactHours, Kernel, MiniMeToken } from "../typechain";
+import { impersonateAddress } from "../helpers/rpc";
 
 const { deployments } = hre;
 const { BigNumber } = ethers;
+
+export interface HatchContext {
+  hatchUser?: Signer;
+  dao?: Kernel;
+  hatch?: IHatch;
+  contributionToken?: ERC20;
+  hatchToken: ERC20;
+  impactHours: IImpactHours;
+  impactHoursClonedToken: MiniMeToken;
+  impactHoursToken: MiniMeToken;
+}
 
 const DAO_ID = "testtec" + Math.random(); // Note this must be unique for each deployment, change it for subsequent deployments
 const NETWORK_ARG = "--network";
@@ -15,8 +27,6 @@ const argValue = (arg, defaultValue) =>
 
 const network = () => argValue(NETWORK_ARG, "local");
 const daoId = () => argValue(DAO_ID_ARG, DAO_ID);
-
-const hatchTemplateAddress = async () => (await deployments.get("HatchTemplate")).address;
 
 // Helpers, no need to change
 const HOURS = 60 * 60;
@@ -93,7 +103,17 @@ const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
   .mul(ONE_TOKEN)
   .div(1000);
 
-async function getAppAddresses(dao: Kernel, ensNames: string[]): Promise<string[]> {
+// There are multiple ERC20 paths. We need to specify one.
+const ERC20Path = "@aragon/os/contracts/lib/token/ERC20.sol:ERC20";
+// Address use to perform hatch operations
+const HATCH_USER = "0xDc2aDfA800a1ffA16078Ef8C1F251D50DcDa1065";
+
+const hatchTemplateAddress = async () => (await deployments.get("HatchTemplate")).address;
+
+const getHatchTemplate = async (signer: Signer): Promise<HatchTemplate> =>
+  (await ethers.getContractAt("HatchTemplate", await hatchTemplateAddress(), signer)) as HatchTemplate;
+
+const getAppAddresses = async (dao: Kernel, ensNames: string[]): Promise<string[]> => {
   return new Promise((resolve, reject) => {
     const inputAppIds = ensNames.map(ethers.utils.namehash);
     const proxies: string[] = [];
@@ -109,9 +129,9 @@ async function getAppAddresses(dao: Kernel, ensNames: string[]): Promise<string[
       }
     });
   });
-}
+};
 
-async function getAddress(selectedFilter: string, contract: Contract, transactionHash: string): Promise<string> {
+const getAddress = async (selectedFilter: string, contract: Contract, transactionHash: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     const filter = contract.filters[selectedFilter]();
 
@@ -122,36 +142,36 @@ async function getAddress(selectedFilter: string, contract: Contract, transactio
       }
     });
   });
-}
+};
 
-export default async function main() {
-  const signers = await ethers.getSigners();
-
-  const hatchTemplate = (await ethers.getContractAt(
-    "HatchTemplate",
-    await hatchTemplateAddress(),
-    signers[0]
-  )) as HatchTemplate;
-  const impactHoursToken = (await ethers.getContractAt("MiniMeToken", IH_TOKEN, signers[0])) as MiniMeToken;
-
-  const transactionOne = await hatchTemplate.createDaoTxOne(
+const createDaoTxOne = async (context: HatchContext, appManager: Signer, log: Function): Promise<void> => {
+  const hatchTemplate = await getHatchTemplate(appManager);
+  const tx = await hatchTemplate.createDaoTxOne(
     ORG_TOKEN_NAME,
     ORG_TOKEN_SYMBOL,
     [SUPPORT_REQUIRED, MIN_ACCEPTANCE_QUORUM, VOTE_DURATION_BLOCKS, VOTE_BUFFER_BLOCKS, VOTE_EXECUTION_DELAY_BLOCKS],
     COLLATERAL_TOKEN
   );
 
-  await transactionOne.wait();
+  await tx.wait();
 
-  // Filter and get the org address from the events.
-  const daoAddress = await getAddress("DeployDao", hatchTemplate, transactionOne.hash);
+  const daoAddress = await getAddress("DeployDao", hatchTemplate, tx.hash);
+  const dao = (await ethers.getContractAt("Kernel", daoAddress)) as Kernel;
+
+  context.dao = dao;
 
   log(`Tx one completed: Hatch DAO (${daoAddress}) created. Dandelion Voting and Hooked Token Manager set up.`);
+};
+
+const createDaoTxTwo = async (context: HatchContext, appManager: Signer, log: Function): Promise<void> => {
+  const hatchTemplate = await getHatchTemplate(appManager);
+  const hatchUser = context.hatchUser;
+  const impactHoursToken = (await ethers.getContractAt("MiniMeToken", IH_TOKEN, appManager)) as MiniMeToken;
 
   const totalImpactHours = await impactHoursToken.totalSupply();
   const expectedRaise = EXPECTED_RAISE_PER_IH.mul(totalImpactHours).div(ONE_TOKEN);
 
-  const transactionTwo = await hatchTemplate.createDaoTxTwo(
+  const tx = await hatchTemplate.createDaoTxTwo(
     HATCH_MIN_GOAL,
     HATCH_MAX_GOAL,
     HATCH_PERIOD,
@@ -165,18 +185,40 @@ export default async function main() {
     expectedRaise
   );
 
-  await transactionTwo.wait();
-
-  const dao = (await ethers.getContractAt("Kernel", daoAddress)) as Kernel;
-  const [hatchAddress, impactHoursAddress] = await getAppAddresses(dao, [
+  const [hatchAddress, impactHoursAddress] = await getAppAddresses(context.dao, [
     "marketplace-hatch.open.aragonpm.eth",
     "impact-hours-beta.open.aragonpm.eth",
   ]);
 
+  context.hatch = (await ethers.getContractAt("IHatch", hatchAddress, hatchUser)) as IHatch;
+  context.contributionToken = (await ethers.getContractAt(
+    ERC20Path,
+    await context.hatch.contributionToken(),
+    hatchUser
+  )) as ERC20;
+  context.hatchToken = (await ethers.getContractAt(ERC20Path, await context.hatch.token(), hatchUser)) as ERC20;
+  context.impactHours = (await ethers.getContractAt("IImpactHours", impactHoursAddress, hatchUser)) as IImpactHours;
+  context.impactHoursClonedToken = (await ethers.getContractAt(
+    "MiniMeToken",
+    await context.impactHours.token(),
+    hatchUser
+  )) as MiniMeToken;
+  context.impactHoursToken = (await ethers.getContractAt(
+    "MiniMeToken",
+    await context.impactHoursClonedToken.parentToken(),
+    hatchUser
+  )) as MiniMeToken;
+
   log(`Tx two completed: Impact Hours app and Hatch app set up.`);
 
-  const transactionThree = await hatchTemplate.createDaoTxThree(
-    daoId(),
+  await tx.wait();
+};
+
+const createDaoTxThree = async (context: HatchContext, appManager: Signer, log: Function): Promise<void> => {
+  const hatchTemplate = await getHatchTemplate(appManager);
+
+  const tx = await hatchTemplate.createDaoTxThree(
+    DAO_ID,
     [COLLATERAL_TOKEN],
     COLLATERAL_TOKEN,
     TOLLGATE_FEE,
@@ -184,11 +226,22 @@ export default async function main() {
     HATCH_ORACLE_RATIO
   );
 
-  await transactionThree.wait();
+  await tx.wait();
 
   log(`Tx three completed: Tollgate, Redemptions and Conviction Voting apps set up.`);
+};
 
-  return [daoAddress, hatchAddress, impactHoursAddress];
+export default async function main(log = console.log) {
+  const hatchTemplateContext = {} as HatchContext;
+  const appManager = await ethers.getSigners()[0];
+
+  hatchTemplateContext.hatchUser = await impersonateAddress(HATCH_USER);
+
+  await createDaoTxOne(hatchTemplateContext, appManager, log);
+  await createDaoTxTwo(hatchTemplateContext, appManager, log);
+  await createDaoTxThree(hatchTemplateContext, appManager, log);
+
+  return hatchTemplateContext;
 }
 
 // We recommend this pattern to be able to use async/await everywhere
