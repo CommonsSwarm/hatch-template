@@ -93,11 +93,9 @@ const config: HardhatUserConfig = {
       gas: 12450000,
       gasPrice: 8000000000,
       allowUnlimitedContractSize: true,
-      throwOnTransactionFailures: false,
-      throwOnCallFailures: false,
       forking: {
         url: "https://xdai-archive.blockscout.com",
-        blockNumber: 14890853,
+        blockNumber: 15032477,
       },
     },
     localhost: {

@@ -1,6 +1,7 @@
 import { Contract } from "@ethersproject/contracts";
 import hre, { ethers } from "hardhat";
-import { HatchTemplate, Kernel } from "../typechain";
+import { HatchTemplate, Kernel, MiniMeToken } from "../typechain";
+import { log } from "../test/helpers/helpers";
 
 const { deployments } = hre;
 const { BigNumber } = ethers;
@@ -32,7 +33,7 @@ console.log(`Every ${BLOCKTIME}s a new block is mined in ${network()}.`);
 // CONFIGURATION
 
 // Collateral Token is used to pay contributors and held in the bonding curve reserve
-export const COLLATERAL_TOKEN = "0xfb8f60246d56905866e12443ec0836ebfb3e1f2e"; // tDAI
+const COLLATERAL_TOKEN = "0xfb8f60246d56905866e12443ec0836ebfb3e1f2e"; // tDAI
 
 // Org Token represents membership in the community and influence in proposals
 const ORG_TOKEN_NAME = "Token Engineering Commons TEST Hatch Token";
@@ -41,10 +42,10 @@ const ORG_TOKEN_SYMBOL = "TESTTECH";
 // # Hatch Oracle Settings
 
 // Score membership token is used to check how much members can contribute to the hatch
-export const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
+const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
 const SCORE_ONE_TOKEN = BigNumber.from(1);
 // Ratio contribution tokens allowed per score membership token
-const HATCH_ORACLE_RATIO = BigNumber.from(0.005 * PPM)
+const HATCH_ORACLE_RATIO = BigNumber.from(0.8 * PPM)
   .mul(FUNDRAISING_ONE_TOKEN)
   .div(SCORE_ONE_TOKEN);
 
@@ -84,8 +85,9 @@ const OPEN_DATE = 0;
 
 // Impact Hours token address
 const IH_TOKEN = "0xdf2c3c8764a92eb43d2eea0a4c2d77c2306b0835";
-// Max theoretical rate per impact hour in Collateral_token per IH
-const MAX_IH_RATE = 1;
+// Max theoretical collateral token rate per impact hour
+const MAX_IH_RATE = BigNumber.from(100).mul(ONE_TOKEN);
+
 // How much will we need to raise to reach 1/2 of the MAX_IH_RATE divided by total IH
 const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
   .mul(ONE_TOKEN)
@@ -94,7 +96,7 @@ const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
 async function getAppAddresses(dao: Kernel, ensNames: string[]): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const inputAppIds = ensNames.map(ethers.utils.namehash);
-    const proxies:string[] = [];
+    const proxies: string[] = [];
 
     dao.on("NewAppProxy", (proxy, isUpgradeable, appId, event) => {
       const index = inputAppIds.indexOf(appId);
@@ -123,7 +125,6 @@ async function getAddress(selectedFilter: string, contract: Contract, transactio
 }
 
 export default async function main() {
-  // We get the contract to deploy
   const signers = await ethers.getSigners();
 
   const hatchTemplate = (await ethers.getContractAt(
@@ -131,6 +132,7 @@ export default async function main() {
     await hatchTemplateAddress(),
     signers[0]
   )) as HatchTemplate;
+  const impactHoursToken = (await ethers.getContractAt("MiniMeToken", IH_TOKEN, signers[0])) as MiniMeToken;
 
   const transactionOne = await hatchTemplate.createDaoTxOne(
     ORG_TOKEN_NAME,
@@ -138,12 +140,16 @@ export default async function main() {
     [SUPPORT_REQUIRED, MIN_ACCEPTANCE_QUORUM, VOTE_DURATION_BLOCKS, VOTE_BUFFER_BLOCKS, VOTE_EXECUTION_DELAY_BLOCKS],
     COLLATERAL_TOKEN
   );
-  const createDaoTxOneReceipt = await transactionOne.wait();
+
+  await transactionOne.wait();
 
   // Filter and get the org address from the events.
   const daoAddress = await getAddress("DeployDao", hatchTemplate, transactionOne.hash);
 
-  console.log(`Tx One Complete. DAO address: ${daoAddress}. Gas used: ${createDaoTxOneReceipt.gasUsed} `);
+  log(`Tx one completed: Hatch DAO (${daoAddress}) created. Dandelion Voting and Hooked Token Manager set up.`);
+
+  const totalImpactHours = await impactHoursToken.totalSupply();
+  const expectedRaise = EXPECTED_RAISE_PER_IH.mul(totalImpactHours).div(ONE_TOKEN);
 
   const transactionTwo = await hatchTemplate.createDaoTxTwo(
     HATCH_MIN_GOAL,
@@ -156,17 +162,18 @@ export default async function main() {
     OPEN_DATE,
     IH_TOKEN,
     MAX_IH_RATE,
-    EXPECTED_RAISE_PER_IH
+    expectedRaise
   );
-  const createDaoTxTwoReceipt = await transactionTwo.wait();
+
+  await transactionTwo.wait();
 
   const dao = (await ethers.getContractAt("Kernel", daoAddress)) as Kernel;
   const [hatchAddress, impactHoursAddress] = await getAppAddresses(dao, [
     "marketplace-hatch.open.aragonpm.eth",
-    "impact-hours-beta.open.aragonpm.eth"
+    "impact-hours-beta.open.aragonpm.eth",
   ]);
 
-  console.log(`Tx Two Complete. Hatch address: ${hatchAddress}. Gas used: ${createDaoTxTwoReceipt.gasUsed}`);
+  log(`Tx two completed: Impact Hours app and Hatch app set up.`);
 
   const transactionThree = await hatchTemplate.createDaoTxThree(
     daoId(),
@@ -176,9 +183,10 @@ export default async function main() {
     SCORE_TOKEN,
     HATCH_ORACLE_RATIO
   );
-  const createDaoTxThreeReceipt = await transactionThree.wait();
 
-  console.log(`Tx Three Complete. Gas used: ${createDaoTxThreeReceipt.gasUsed}`);
+  await transactionThree.wait();
+
+  log(`Tx three completed: Tollgate, Redemptions and Conviction Voting apps set up.`);
 
   return [daoAddress, hatchAddress, impactHoursAddress];
 }

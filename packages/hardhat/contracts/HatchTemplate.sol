@@ -56,7 +56,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     // New DAO functions //
 
     /**
-    * @dev Create the DAO and initialise the basic apps necessary for gardens
+    * @dev Create the DAO and initialise the basic apps.
     * @param _voteTokenName The name for the token used by share holders in the organization
     * @param _voteTokenSymbol The symbol for the token used by share holders in the organization
     * @param _votingSettings Array of [supportRequired, minAcceptanceQuorum, voteDuration, voteBufferBlocks, voteExecutionDelayBlocks] to set up the voting app of the organization
@@ -99,7 +99,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     * @param _openDate The time the hatch starts, requires manual opening if set to 0
     * @param _ihToken Impact hours token address
     * @param _maxIHRate Max theoretical rate per impact hour in Collateral_token per IH
-    * @param _expectedRaisePerIH How much will we need to raise to reach 1/2 of the MAX_IH_RATE divided by total IH
+    * @param _expectedRaise How much will we need to raise to reach 1/2 of the MAX_IH_RATE 
     */
     function createDaoTxTwo(
         uint256 _minGoal,
@@ -112,7 +112,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         uint64 _openDate,
         address _ihToken,
         uint256 _maxIHRate,
-        uint256 _expectedRaisePerIH
+        uint256 _expectedRaise
     )
         public
     {
@@ -129,14 +129,14 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
             _openDate
         );
 
-        senderStoredAddresses[msg.sender].impactHours = _installImpactHours(senderStoredAddresses[msg.sender].dao, _ihToken, _hatch, _maxIHRate, _expectedRaisePerIH);
+        senderStoredAddresses[msg.sender].impactHours = _installImpactHours(senderStoredAddresses[msg.sender].dao, _ihToken, _hatch, _maxIHRate, _expectedRaise);
 
         _createHookedTokenManagerPermissions();
-        senderStoredAddresses[msg.sender].acl.createPermission(ANY_ENTITY, senderStoredAddresses[msg.sender].impactHours, senderStoredAddresses[msg.sender].impactHours.CLAIM_ROLE(), address(this));
+        senderStoredAddresses[msg.sender].acl.createPermission(ANY_ENTITY, senderStoredAddresses[msg.sender].impactHours, senderStoredAddresses[msg.sender].impactHours.CLOSE_HATCH_ROLE(), address(this));
     }
 
     /**
-    * @dev Add and initialise tollgate, redemptions and conviction voting or finance apps
+    * @dev Add and initialise tollgate, redemptions and conviction voting apps
     * @param _id Unique Aragon DAO ID
     * @param _redeemableTokens Array of initially redeemable tokens
     * @param _tollgateFeeToken The token used to pay the tollgate fee
@@ -172,7 +172,6 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
 
         senderStoredAddresses[msg.sender].hatchOracle = _installHatchOracleApp(senderStoredAddresses[msg.sender].dao, _scoreToken, _hatchOracleRatio, senderStoredAddresses[msg.sender].hatch);
         _createHatchPermissions();
-        _removePermissionFromTemplate(senderStoredAddresses[msg.sender].acl, senderStoredAddresses[msg.sender].impactHours, senderStoredAddresses[msg.sender].impactHours.CLAIM_ROLE());
 
         Redemptions redemptions = _installRedemptions(senderStoredAddresses[msg.sender].dao, senderStoredAddresses[msg.sender].reserveAgent, hookedTokenManager, _redeemableTokens);
         _createRedemptionsPermissions(acl, redemptions, dandelionVoting);
@@ -210,11 +209,11 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         return hatchOracle;
     }
 
-    function _installImpactHours(Kernel _dao, address _impactHoursToken, address _hatch, uint256 _maxRate, uint256 _expectedRaisePerIH)
+    function _installImpactHours(Kernel _dao, address _impactHoursToken, address _hatch, uint256 _maxRate, uint256 _expectedRaise)
         internal returns(ImpactHours)
     {
         ImpactHours ih = ImpactHours(_installNonDefaultApp(_dao, IMPACT_HOURS_ID));
-        ih.initialize(_impactHoursToken, _hatch, _maxRate, _expectedRaisePerIH);
+        ih.initialize(_impactHoursToken, _hatch, _maxRate, _expectedRaise);
         return ih;
     }
 
@@ -340,8 +339,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
 
     function _createHookedTokenManagerPermissions() internal {
         (, ACL acl, DandelionVoting dandelionVoting,, HookedTokenManager hookedTokenManager,) = _getStoredAddressesTxOne();
-        (, Hatch hatch) = _getStoredAddressesTxTwo();
-        ImpactHours impactHours = senderStoredAddresses[msg.sender].impactHours;
+        (, Hatch hatch, ImpactHours impactHours) = _getStoredAddressesTxTwo();
 
         acl.createPermission(impactHours, hookedTokenManager, hookedTokenManager.MINT_ROLE(), dandelionVoting);
         acl.createPermission(hatch, hookedTokenManager, hookedTokenManager.ISSUE_ROLE(), dandelionVoting);
@@ -352,15 +350,13 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
 
     function _createHatchPermissions() internal {
         (, ACL acl, DandelionVoting dandelionVoting,,,) = _getStoredAddressesTxOne();
-        (Agent reserveAgent, Hatch hatch) = _getStoredAddressesTxTwo();
+        (Agent reserveAgent, Hatch hatch, ImpactHours impactHours) = _getStoredAddressesTxTwo();
 
         acl.createPermission(ANY_ENTITY, hatch, hatch.OPEN_ROLE(), dandelionVoting);
         acl.createPermission(ANY_ENTITY, hatch, hatch.CONTRIBUTE_ROLE(), this);
-        acl.createPermission(ANY_ENTITY, hatch, hatch.CLOSE_ROLE(), this);
+        acl.createPermission(impactHours, hatch, hatch.CLOSE_ROLE(), dandelionVoting);
         _setOracle(acl, ANY_ENTITY, hatch, hatch.CONTRIBUTE_ROLE(), senderStoredAddresses[msg.sender].hatchOracle);
-        _setOracle(acl, ANY_ENTITY, hatch, hatch.CLOSE_ROLE(), senderStoredAddresses[msg.sender].impactHours);
         acl.setPermissionManager(dandelionVoting, hatch, hatch.CONTRIBUTE_ROLE());
-        acl.setPermissionManager(dandelionVoting, hatch, hatch.CLOSE_ROLE());
     }
 
     // Temporary Storage functions //
@@ -397,11 +393,12 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         addresses.hatch = _hatch;
     }
 
-    function _getStoredAddressesTxTwo() internal returns (Agent, Hatch) {
+    function _getStoredAddressesTxTwo() internal returns (Agent, Hatch, ImpactHours) {
         StoredAddresses storage addresses = senderStoredAddresses[msg.sender];
         return (
             addresses.reserveAgent,
-            addresses.hatch
+            addresses.hatch,
+            addresses.impactHours
         );
     }
 
