@@ -1,41 +1,12 @@
-import { ethers } from "hardhat";
-import { Contract } from "@ethersproject/contracts";
 import { BigNumber } from "@ethersproject/bignumber";
 
 import fetch from "node-fetch";
 
-import { ERC20, IHatch, IImpactHours, Kernel, MiniMeToken } from "../../typechain/index";
+import { IImpactHours, MiniMeToken } from "../../typechain/index";
 
-export async function getAddress(selectedFilter: string, contract: Contract, transactionHash: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const filter = contract.filters[selectedFilter]();
-
-    contract.on(filter, (contractAddress, event) => {
-      if (event.transactionHash === transactionHash) {
-        contract.removeAllListeners(filter);
-        resolve(contractAddress);
-      }
-    });
-  });
-}
-
-export async function getAppAddresses(dao: Kernel, ensNames: string[]): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    const inputAppIds = ensNames.map(ethers.utils.namehash);
-    const proxies: string[] = [];
-
-    dao.on("NewAppProxy", (proxy, isUpgradeable, appId, event) => {
-      const index = inputAppIds.indexOf(appId);
-      if (index >= 0) {
-        proxies[index] = proxy;
-      }
-      if (proxies.length === ensNames.length) {
-        dao.removeAllListeners("NewAppProxy");
-        resolve(proxies);
-      }
-    });
-  });
-}
+export const now = (): BigNumber => {
+  return BigNumber.from(Math.floor(new Date().getTime() / 1000));
+};
 
 export const calculateRewards = async (
   impactHours: IImpactHours,
