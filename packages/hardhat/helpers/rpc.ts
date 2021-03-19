@@ -33,14 +33,14 @@ export const impersonateAddress = async (address: string) => {
   return signer;
 };
 
-export const takeSnapshot = async () => {
-  return await hre.network.provider.request({
+export const takeSnapshot = async (): Promise<string> => {
+  return (await hre.network.provider.request({
     method: "evm_snapshot",
     params: [],
-  });
+  })) as Promise<string>;
 };
 
-export const restoreSnapshot = async (id) => {
+export const restoreSnapshot = async (id: string): Promise<void> => {
   await hre.network.provider.request({
     method: "evm_revert",
     params: [id],
