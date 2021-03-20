@@ -1,7 +1,7 @@
 import hre, { ethers } from "hardhat";
 import { Contract } from "@ethersproject/contracts";
 import { Signer } from "@ethersproject/abstract-signer";
-import { ERC20, HatchTemplate, IHatch, IImpactHours, Kernel, MiniMeToken } from "../typechain";
+import { ERC20, HatchTemplate, IHatch, IImpactHours, Kernel, MiniMeToken, Redemptions } from "../typechain";
 import { impersonateAddress } from "../helpers/rpc";
 import getParams from "../params";
 
@@ -16,6 +16,7 @@ export interface HatchContext {
   impactHours?: IImpactHours;
   impactHoursClonedToken?: MiniMeToken;
   impactHoursToken?: MiniMeToken;
+  redemptions?: Redemptions;
 }
 
 // Script arguments
@@ -150,6 +151,7 @@ const createDaoTxTwo = async (context: HatchContext, appManager: Signer, log: Fu
     await context.hatch.contributionToken(),
     hatchUser
   )) as ERC20;
+
   context.hatchToken = (await ethers.getContractAt(ERC20Path, await context.hatch.token(), hatchUser)) as ERC20;
   context.impactHours = (await ethers.getContractAt("IImpactHours", impactHoursAddress, hatchUser)) as IImpactHours;
   context.impactHoursClonedToken = (await ethers.getContractAt(
@@ -181,6 +183,14 @@ const createDaoTxThree = async (context: HatchContext, appManager: Signer, log: 
   );
 
   await tx.wait();
+
+  const [redemptionsAddress] = await getAppAddresses(context.dao, ["redemptions.1hive.aragonpm.eth"]);
+
+  context.redemptions = (await ethers.getContractAt(
+    "Redemptions",
+    redemptionsAddress,
+    context.hatchUser
+  )) as Redemptions;
 
   log(`Tx three completed: Tollgate, Redemptions and Conviction Voting apps set up.`);
 };
