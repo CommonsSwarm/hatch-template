@@ -2,6 +2,9 @@ import { ethers } from "ethers";
 
 const { BigNumber } = ethers;
 
+// xdai as default network.
+const DEFAULT_CHAIN = 5;
+
 // Helpers, no need to change
 const HOURS = 60 * 60;
 const DAYS = 24 * HOURS;
@@ -72,7 +75,7 @@ const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
   .mul(ONE_TOKEN)
   .div(1000);
 
-const getParams = (blockTime) => ({
+const getParams = (blockTime = DEFAULT_CHAIN) => ({
   HOURS,
   DAYS,
   ONE_HUNDRED_PERCENT,
