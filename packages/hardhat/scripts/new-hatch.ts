@@ -115,7 +115,7 @@ const createDaoTxOne = async (context: HatchContext, appManager: Signer, log: Fu
 
   context.dao = dao;
 
-  log(`Tx one completed: Hatch DAO (${daoAddress}) created. Dandelion Voting and Hooked Token Manager set up.`);
+  log(`Tx one completed: Hatch DAO (${daoAddress}) created. Dandelion Voting and Token Manager set up.`);
 };
 
 const createDaoTxTwo = async (context: HatchContext, appManager: Signer, log: Function): Promise<void> => {
