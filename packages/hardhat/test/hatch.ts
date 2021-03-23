@@ -79,9 +79,6 @@ describe("Hatch Flow", () => {
         await redemptions.tokenManager(),
         hatchUser
       )) as TokenManager;
-      console.log((await tokenManager.spendableBalanceOf(USER1)).toString());
-      console.log((await contributionToken.balanceOf(await hatch.reserve())).toString());
-      console.log((await hatchToken.balanceOf(USER1)).toString());
 
       assertBn(
         await contributionToken.balanceOf(hatch.address),

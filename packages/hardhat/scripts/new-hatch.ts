@@ -192,7 +192,7 @@ const createDaoTxThree = async (context: HatchContext, appManager: Signer, log: 
     context.hatchUser
   )) as Redemptions;
 
-  log(`Tx three completed: Tollgate, Redemptions and Conviction Voting apps set up.`);
+  log(`Tx three completed: Tollgate, Hatch Oracle, Redemptions and Migration Tools apps set up.`);
 };
 
 export default async function main(hatchUserAddress?: string, log = console.log) {

@@ -212,7 +212,7 @@
     truffle-hdwallet-provider "0.0.3"
     truffle-hdwallet-provider-privkey "0.3.0"
 
-"@aragon/os@^4.0.0", "@aragon/os@^4.2.0", "@aragon/os@^4.2.1":
+"@aragon/os@^4.0.0", "@aragon/os@^4.2.0", "@aragon/os@^4.2.1", "@aragon/os@^4.4.0":
   version "4.4.0"
   resolved "https://registry.yarnpkg.com/@aragon/os/-/os-4.4.0.tgz#af3e80b11f71209f86dba8b2b3f37a4b025aff7b"
   integrity sha512-EYyMj5pX0Qxu7axHAPe4hqwwDINDn+6ZZ4DqJP0tAKYKDmTxHcW8m/7DDctIM3uRqXr8HlYrNOGd6zE/hhHetQ==
@@ -1408,6 +1408,14 @@
   dependencies:
     exec-sh "^0.3.2"
     minimist "^1.2.0"
+
+"@commonsswarm/migration-tools@https://github.com/commonsswarm/migration-tools/tarball/master":
+  version "0.0.1"
+  resolved "https://github.com/commonsswarm/migration-tools/tarball/master#f03e503fea719afe8d4d2737ce4de3d7ab19e6d8"
+  dependencies:
+    "@aragon/apps-token-manager" "^2.1.0"
+    "@aragon/apps-vault" "^4.1.0"
+    "@aragon/os" "^4.4.0"
 
 "@csstools/convert-colors@^1.4.0":
   version "1.4.0"
