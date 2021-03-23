@@ -2,10 +2,11 @@ import { ethers } from "hardhat";
 import { use, assert } from "chai";
 import { ContractTransaction } from "ethers";
 import { assertBn, assertRevert } from "./helpers/asserts";
-import { calculateRewards, claimRewards, contributeToHatch, createContextForUser, log } from "./helpers/helpers";
+import { calculateRewards, claimRewards, contributeToHatch, log } from "./helpers/helpers";
+import { userContext, UserContext } from "./helpers/user-context"
 import { solidity } from "ethereum-waffle";
 
-import { default as newHatch, HatchContext } from "../scripts/new-hatch";
+import newHatch, { HatchAddresses } from "../scripts/new-hatch";
 import { BigNumber } from "@ethersproject/bignumber";
 import {
   getStateByKey,
@@ -17,7 +18,6 @@ import {
 import { HATCH_ERRORS, IMPACT_HOURS_ERRORS, REDEMPTIONS_ERRORS, TOKEN_ERRORS } from "./helpers/errors";
 import { impersonateAddress, increase, restoreSnapshot, takeSnapshot } from "../helpers/rpc";
 import getParams from "../params";
-import { TokenManager } from "../typechain";
 
 const { PPM: ppm } = getParams();
 const PPM = BigNumber.from(ppm);
@@ -31,8 +31,9 @@ const USER3 = "0x839395e20bbb182fa440d08f850e6c7a8f6f0780";
 const MIN_NEGLIGIBLE_AMOUNT = ethers.BigNumber.from(String("10000000"));
 
 describe("Hatch Flow", () => {
-  let contextUser1: HatchContext;
-  let contextUser2: HatchContext;
+  let hatchAddresses: HatchAddresses;
+  let userContext1: UserContext;
+  let userContext2: UserContext;
   let snapshotId: string;
 
   const useSnapshot = async (): Promise<void> => {
@@ -41,8 +42,9 @@ describe("Hatch Flow", () => {
   };
 
   before(async () => {
-    contextUser1 = await newHatch(USER1, log);
-    contextUser2 = createContextForUser(contextUser1, await impersonateAddress(USER2));
+    hatchAddresses = await newHatch(log);
+    userContext1 = await userContext(hatchAddresses, await impersonateAddress(USER1))
+    userContext2 = await userContext(hatchAddresses, await impersonateAddress(USER2))
 
     snapshotId = await takeSnapshot();
   });
@@ -52,7 +54,7 @@ describe("Hatch Flow", () => {
     let totalContributed: BigNumber;
 
     it("opens the hatch", async () => {
-      const { hatch } = contextUser1;
+      const { hatch } = userContext1;
 
       const tx = await hatch.open();
       await tx.wait();
@@ -61,7 +63,7 @@ describe("Hatch Flow", () => {
     });
 
     it("contributes with a max goal amount to the hatch", async () => {
-      const { hatch, contributionToken, hatchUser, hatchToken, redemptions } = contextUser1;
+      const { hatch, contributionToken, signer: hatchUser, redemptions } = userContext1;
       userContribution = await hatch.maxGoal();
       totalContributed = userContribution;
       await contributionToken.approve(hatch.address, userContribution);
@@ -74,12 +76,6 @@ describe("Hatch Flow", () => {
 
       await hatch.contribute(userContribution);
 
-      const tokenManager = (await ethers.getContractAt(
-        "TokenManager",
-        await redemptions.tokenManager(),
-        hatchUser
-      )) as TokenManager;
-
       assertBn(
         await contributionToken.balanceOf(hatch.address),
         userContribution,
@@ -88,8 +84,9 @@ describe("Hatch Flow", () => {
 
       assert.equal(getStateByKey(await hatch.state()), STATE_GOAL_REACHED, HATCH_ERRORS.ERROR_HATCH_GOAL_NOT_REACHED);
     });
+  
     it("claims the impact hours for all contributors", async () => {
-      const { hatch, impactHours, impactHoursToken, impactHoursClonedToken, hatchToken } = contextUser1;
+      const { hatch, impactHours, impactHoursToken, impactHoursClonedToken, hatchToken } = userContext1;
 
       const totalRaised = await hatch.totalRaised();
       const totalIH = await impactHoursClonedToken.totalSupply();
@@ -113,16 +110,18 @@ describe("Hatch Flow", () => {
         IMPACT_HOURS_ERRORS.ERROR_ALL_TOKENS_NOT_DESTROYED
       );
     });
+  
     it("closes the hatch", async () => {
-      const { hatch, impactHours } = contextUser1;
+      const { hatch, impactHours } = await userContext1;
 
       const tx = await impactHours.closeHatch();
       await tx.wait();
 
       assert.equal(getStateByKey(await hatch.state()), STATE_CLOSED, HATCH_ERRORS.ERROR_HATCH_NOT_CLOSED);
     });
+  
     it("distributes part of the funds to the funding pool", async () => {
-      const { hatch, contributionToken } = contextUser1;
+      const { hatch, contributionToken } = userContext1;
       const fundingPool = await hatch.beneficiary();
       const fundingPoolBalance = totalContributed.mul(await hatch.fundingForBeneficiaryPct()).div(PPM);
 
@@ -132,8 +131,9 @@ describe("Hatch Flow", () => {
         HATCH_ERRORS.ERROR_WRONG_BENEFICIARY_FUNDS_DISTRIBUTION
       );
     });
+
     it("distributes part of the funds to the reserve pool", async () => {
-      const { hatch, contributionToken } = contextUser1;
+      const { hatch, contributionToken } = userContext1;
       const reservePool = await hatch.reserve();
       const reservePoolBalance = totalContributed.mul(PPM.sub(await hatch.fundingForBeneficiaryPct())).div(PPM);
 
@@ -143,8 +143,9 @@ describe("Hatch Flow", () => {
         HATCH_ERRORS.ERROR_WRONG_RESEVE_FUNDS_DISTRIBUTION
       );
     });
+  
     it("distributes part of the initial supply of tokens to funding pool ", async () => {
-      const { hatch, hatchToken } = contextUser1;
+      const { hatch, hatchToken } = userContext1;
       const beneficiary = await hatch.beneficiary();
       const supplyOfferedPct = (await hatch.supplyOfferedPct()).toNumber();
       const hatchTokenOfferedAmount = (await hatchToken.totalSupply()).mul(PPM.sub(supplyOfferedPct)).div(PPM);
@@ -155,8 +156,9 @@ describe("Hatch Flow", () => {
         HATCH_ERRORS.ERROR_WRONG_SUPPLY_OFFERED_DISTRIBUTION
       );
     });
+  
     xit("redeems contributor's token amount", async () => {
-      const { hatchToken, contributionToken, redemptions } = contextUser1;
+      const { hatchToken, contributionToken, redemptions } = userContext1;
       const previousBalance = await contributionToken.balanceOf(USER1);
 
       const tx = await redemptions.redeem(await hatchToken.balanceOf(USER1));
@@ -174,34 +176,38 @@ describe("Hatch Flow", () => {
         REDEMPTIONS_ERRORS.ERROR_REDEEMED_TOKENS_NOT_BURNED
       );
     });
+  
     xit("should not redeem tokens for non-contributors", async () => {
-      const { redemptions } = contextUser2;
+      const { redemptions } = userContext2;
       await assertRevert(redemptions.redeem(userContribution), "REDEMPTIONS_CANNOT_REDEEM_ZERO");
     });
   });
+
   context("When min goal is reached", async () => {
     let minGoalContribution: BigNumber;
 
     before(async () => {
       await useSnapshot();
 
-      const { hatch } = contextUser1;
+      const { hatch } = userContext1;
       let tx: ContractTransaction;
       minGoalContribution = await hatch.minGoal();
 
       tx = await hatch.open();
       await tx.wait();
     });
-    it("hatch state is goal reached", async () => {
-      const { hatch } = contextUser1;
 
-      await contributeToHatch(contextUser1, minGoalContribution);
+    it("hatch state is goal reached", async () => {
+      const { hatch, contributionToken } = userContext1;
+
+      await contributeToHatch(hatch, contributionToken, minGoalContribution);
 
       await increase(await hatch.period());
 
       assert.equal(getStateByKey(await hatch.state()), STATE_GOAL_REACHED, HATCH_ERRORS.ERROR_HATCH_GOAL_NOT_REACHED);
     });
   });
+
   context("When min goal is not reached", async () => {
     let previousBalance: BigNumber;
     let contributionAmount: BigNumber;
@@ -209,7 +215,8 @@ describe("Hatch Flow", () => {
     before(async () => {
       await useSnapshot();
 
-      const { hatch: h1, contributionToken: ct1 } = contextUser1;
+      const { hatch: h1, contributionToken: ct1 } = userContext1;
+      const { hatch: h2, contributionToken: ct2 } = userContext2;
       let tx: ContractTransaction;
 
       tx = await h1.open();
@@ -217,17 +224,19 @@ describe("Hatch Flow", () => {
 
       contributionAmount = (await h1.minGoal()).div(3);
 
-      await contributeToHatch(contextUser1, contributionAmount);
-      await contributeToHatch(contextUser2, contributionAmount);
+      await contributeToHatch(h1, ct1, contributionAmount);
+      await contributeToHatch(h2, ct2, contributionAmount);
 
       await increase(await h1.period());
     });
+
     it("hatch state is refunding", async () => {
-      const { hatch } = contextUser1;
+      const { hatch } = userContext1;
       assert.equal(getStateByKey(await hatch.state()), STATE_REFUNDING);
     });
+
     xit("gives the refund amount to contributor", async () => {
-      const { hatch, contributionToken, hatchToken } = contextUser1;
+      const { hatch, contributionToken } = userContext1;
 
       const tx = await hatch.refund(USER1, 0);
       await tx.wait();
@@ -238,8 +247,9 @@ describe("Hatch Flow", () => {
         HATCH_ERRORS.ERROR_CONTRIBUTOR_NOT_REFUNDED
       );
     });
+
     xit("Burns the hatch tokens once contributor gets refunded", async () => {
-      const { hatchToken } = contextUser1;
+      const { hatchToken } = userContext1;
       assertBn(await hatchToken.balanceOf(USER1), BigNumber.from(0), HATCH_ERRORS.ERROR_HATCH_TOKENS_NOT_BURNED);
     });
   });
