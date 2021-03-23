@@ -16,8 +16,11 @@ import {
   STATE_REFUNDING,
 } from "./helpers/hatch-states";
 import { HATCH_ERRORS, IMPACT_HOURS_ERRORS, REDEMPTIONS_ERRORS, TOKEN_ERRORS } from "./helpers/errors";
-import { impersonateAddress, increase, restoreSnapshot, takeSnapshot } from "../helpers/rpc";
+import { impersonateAddress, increase, duration, restoreSnapshot, takeSnapshot } from "../helpers/rpc";
 import getParams from "../params";
+import { newMigrableDao } from "./helpers/migrable-dao";
+import { encodeActCall, encodeCallScript } from './helpers/aragon-os'
+import { MigrationTools, MiniMeToken, Vault } from "../typechain";
 
 const { PPM: ppm } = getParams();
 const PPM = BigNumber.from(ppm);
@@ -181,6 +184,67 @@ describe("Hatch Flow", () => {
       const { redemptions } = userContext2;
       await assertRevert(redemptions.redeem(userContribution), "REDEMPTIONS_CANNOT_REDEEM_ZERO");
     });
+
+    describe('migration', async() => {
+      let newMigrationTools: MigrationTools, newVault1: Vault, newVault2: Vault, newToken: MiniMeToken
+      before(async () => {
+        ({migrationTools: newMigrationTools, vault1: newVault1, vault2: newVault2, token: newToken } = await newMigrableDao())
+      })
+
+      it("creates migration vote", async () => {
+        const { dandelionVoting, contributionToken, migrationTools, tollgate } = userContext1;
+        const migrateSignature = 'migrate(address,address,address,address,uint256,uint64,uint64,uint64)'
+        const calldata = encodeActCall(migrateSignature, [newMigrationTools.address, newVault1.address, newVault2.address, contributionToken.address, 0, 0, 1, 1])
+        const script = encodeCallScript([{
+          to: migrationTools.address,
+          calldata,
+        }])
+        const voteScript = encodeCallScript([{
+          to: dandelionVoting.address,
+          calldata: encodeActCall('newVote(bytes,string,bool)', [script, '', false]),
+        }])
+        const [tollgateToken, tollgateFee] = await tollgate.forwardFee()
+        assert.equal(tollgateToken, contributionToken.address)
+        await contributionToken.approve(tollgate.address, tollgateFee)
+        await (await tollgate.forward(voteScript)).wait()
+        const vote = await dandelionVoting.getVote(1)
+        assert.strictEqual(vote.script, script)
+        assert.isTrue(vote.open)
+      })
+
+      it("vote and wait 2 blocks", async() => {
+        const { dandelionVoting, hatchToken } = userContext1;
+        const vote = await dandelionVoting.getVote(1)
+        const userBalance = await hatchToken.balanceOf(USER1)
+        assert.equal(hatchToken.address, await dandelionVoting.token(), 'tokens do not match')
+        assert.isTrue(userBalance.toString() != '0', 'User can not vote')
+        assertBn(await hatchToken.balanceOfAt(USER1, vote.snapshotBlock), userBalance)
+        assert.equal(await dandelionVoting.getVoterState(1, USER1), 0, 'user already voted')
+        assert.isTrue((await dandelionVoting.canVote(1, USER1)))
+        await dandelionVoting.vote(1, true)
+        increase(duration.seconds(5))
+        increase(duration.seconds(5))
+        assert.isFalse((await dandelionVoting.getVote(1)).open)
+        assert.isTrue(await dandelionVoting.canExecute(1))
+      })
+
+      it("executes", async() => {
+        const { dandelionVoting, contributionToken, migrationTools } = userContext1;
+        const vault1Funds = await contributionToken.balanceOf(await migrationTools.vault1())
+        const vault2Funds = await contributionToken.balanceOf(await migrationTools.vault2())
+        const allFunds = vault1Funds.add(vault2Funds)
+        await dandelionVoting.executeVote(1)
+        assertBn(await contributionToken.balanceOf(newVault1.address), BigNumber.from('0'))
+        assertBn(await contributionToken.balanceOf(newVault2.address), allFunds)
+      })
+
+      it("convert tokens", async() => {
+        const { hatchToken } = userContext1;
+        const balance = await hatchToken.balanceOf(USER1)
+        await newMigrationTools.claimFor(USER1)
+        await assertBn(await newToken.balanceOf(USER1), balance)
+      })
+    })
   });
 
   context("When min goal is reached", async () => {

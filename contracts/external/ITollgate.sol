@@ -16,4 +16,6 @@ contract ITollgate {
     * @param _feeDestination Destination for collected fees
     */
     function initialize(ERC20 _feeToken, uint256 _feeAmount, address _feeDestination) external;
+    function forwardFee() external view returns (address, uint256);
+    function forward(bytes _evmScript) public;
 }
