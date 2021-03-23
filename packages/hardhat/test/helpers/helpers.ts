@@ -1,30 +1,16 @@
 import { BigNumber } from "@ethersproject/bignumber";
-import { Signer } from "@ethersproject/abstract-signer";
-import { Contract, ContractTransaction } from "@ethersproject/contracts";
-
+import { ContractTransaction } from "@ethersproject/contracts";
 import fetch from "node-fetch";
-import { HatchContext } from "../../scripts/new-hatch";
 
-import { IImpactHours, MiniMeToken } from "../../typechain/index";
+import { ERC20, IHatch, IImpactHours, Redemptions, MiniMeToken } from "../../typechain/index";
 
 export const log = (message: string, spaces = 4): void => console.log(`${" ".repeat(spaces)}⚡ ${message}`);
-
-export const createContextForUser = (context: HatchContext, newUser: Signer): HatchContext => {
-  const resContext = Object.keys(context).reduce((newContext, key) => {
-    const handler = context[key];
-    if (handler instanceof Contract) newContext[key] = context[key].connect(newUser);
-    else newContext[key] = newUser;
-    return newContext;
-  }, {}) as HatchContext;
-  return resContext;
-};
 
 export const now = (): BigNumber => {
   return BigNumber.from(Math.floor(new Date().getTime() / 1000));
 };
 
-export const contributeToHatch = async (context: HatchContext, amount: BigNumber): Promise<void> => {
-  const { hatch, contributionToken } = context;
+export const contributeToHatch = async (hatch: IHatch, contributionToken: ERC20, amount: BigNumber): Promise<void> => {
   let tx: ContractTransaction;
 
   tx = await contributionToken.approve(hatch.address, amount);
