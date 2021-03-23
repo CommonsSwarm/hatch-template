@@ -2,7 +2,9 @@ import { BigNumber } from "@ethersproject/bignumber";
 import { ContractTransaction } from "@ethersproject/contracts";
 import fetch from "node-fetch";
 
-import { ERC20, IHatch, IImpactHours, Redemptions, MiniMeToken } from "../../typechain/index";
+import { ERC20, IHatch, IImpactHours, MiniMeToken } from "../../typechain/index";
+
+export const ZERO_ADDRESS = '0x' + '0'.repeat(40) // 0x0000...0000
 
 export const log = (message: string, spaces = 4): void => console.log(`${" ".repeat(spaces)}⚡ ${message}`);
 

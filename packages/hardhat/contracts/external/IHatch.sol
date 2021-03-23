@@ -13,6 +13,7 @@ contract IHatch {
     event Contribute  (address indexed contributor, uint256 value, uint256 amount, uint256 vestedPurchaseId);
     event Refund      (address indexed contributor, uint256 value, uint256 amount, uint256 vestedPurchaseId);
 
+    address                                         public tokenManager;
     ERC20                                           public token;
 
     address                                         public reserve;

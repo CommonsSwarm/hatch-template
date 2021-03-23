@@ -33,9 +33,9 @@ const HATCH_ORACLE_RATIO = BigNumber.from(0.8 * PPM)
 
 // # Dandelion Voting Settings
 // Used for administrative or binary choice decisions with ragequit-like functionality on Dandelion Voting
-const VOTE_DURATION = 3 * DAYS;
+const VOTE_DURATION = 10 // Alternatively: 3 * DAYS;
 const VOTE_BUFFER = 3 * DAYS;
-const VOTE_EXECUTION_DELAY = 24 * HOURS;
+const VOTE_EXECUTION_DELAY = 5 // Alternatively: 24 * HOURS;
 const SUPPORT_REQUIRED = String(0.6 * ONE_HUNDRED_PERCENT);
 const MIN_ACCEPTANCE_QUORUM = String(0.02 * ONE_HUNDRED_PERCENT);
 
