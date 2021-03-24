@@ -222,8 +222,8 @@ describe("Hatch Flow", () => {
         assert.equal(await dandelionVoting.getVoterState(1, USER1), 0, 'user already voted')
         assert.isTrue((await dandelionVoting.canVote(1, USER1)))
         await dandelionVoting.vote(1, true)
-        increase(duration.seconds(5))
-        increase(duration.seconds(5))
+        await increase(duration.seconds(5))
+        await increase(duration.seconds(5))
         assert.isFalse((await dandelionVoting.getVote(1)).open)
         assert.isTrue(await dandelionVoting.canExecute(1))
       })
@@ -273,7 +273,6 @@ describe("Hatch Flow", () => {
   });
 
   context("When min goal is not reached", async () => {
-    let previousBalance: BigNumber;
     let contributionAmount: BigNumber;
 
     before(async () => {
@@ -283,8 +282,7 @@ describe("Hatch Flow", () => {
       const { hatch: h2, contributionToken: ct2 } = userContext2;
       let tx: ContractTransaction;
 
-      tx = await h1.open();
-      await tx.wait();
+      await (await h1.open()).wait();
 
       contributionAmount = (await h1.minGoal()).div(3);
 
@@ -299,22 +297,36 @@ describe("Hatch Flow", () => {
       assert.equal(getStateByKey(await hatch.state()), STATE_REFUNDING);
     });
 
-    xit("gives the refund amount to contributor", async () => {
-      const { hatch, contributionToken } = userContext1;
+    it("gives the refund amount to contributor", async () => {
+      const { hatch, contributionToken, hatchToken, tokenManager } = userContext1;
+      const { hatch: hatch2 } = userContext2
 
-      const tx = await hatch.refund(USER1, 0);
-      await tx.wait();
+      const previousBalance1 = await contributionToken.balanceOf(USER1)
+      const previousBalance2 = await contributionToken.balanceOf(USER2)
+
+      assertBn(await hatchToken.balanceOf(USER1), await hatch.contributionToTokens(contributionAmount))
+      assert.equal(tokenManager.address, await hatchToken.controller())
+
+      await(await hatch.refund(USER1, 0)).wait();
+      await(await hatch2.refund(USER2, 0)).wait();
 
       assertBn(
         await contributionToken.balanceOf(USER1),
-        previousBalance.add(contributionAmount),
+        previousBalance1.add(contributionAmount),
+        HATCH_ERRORS.ERROR_CONTRIBUTOR_NOT_REFUNDED
+      );
+
+      assertBn(
+        await contributionToken.balanceOf(USER2),
+        previousBalance2.add(contributionAmount),
         HATCH_ERRORS.ERROR_CONTRIBUTOR_NOT_REFUNDED
       );
     });
 
-    xit("Burns the hatch tokens once contributor gets refunded", async () => {
+    it("Burns the hatch tokens once contributor gets refunded", async () => {
       const { hatchToken } = userContext1;
       assertBn(await hatchToken.balanceOf(USER1), BigNumber.from(0), HATCH_ERRORS.ERROR_HATCH_TOKENS_NOT_BURNED);
+      assertBn(await hatchToken.balanceOf(USER2), BigNumber.from(0), HATCH_ERRORS.ERROR_HATCH_TOKENS_NOT_BURNED);
     });
   });
 });
