@@ -299,7 +299,6 @@ describe("Hatch Flow", () => {
 
     it("gives the refund amount to contributor", async () => {
       const { hatch, contributionToken, hatchToken, tokenManager } = userContext1;
-      const { hatch: hatch2 } = userContext2
 
       const previousBalance1 = await contributionToken.balanceOf(USER1)
       const previousBalance2 = await contributionToken.balanceOf(USER2)
@@ -308,7 +307,7 @@ describe("Hatch Flow", () => {
       assert.equal(tokenManager.address, await hatchToken.controller())
 
       await(await hatch.refund(USER1, 0)).wait();
-      await(await hatch2.refund(USER2, 0)).wait();
+      await(await hatch.refund(USER2, 0)).wait();
 
       assertBn(
         await contributionToken.balanceOf(USER1),
