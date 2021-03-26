@@ -1,3 +1,18 @@
+# Commons Swarm Hatch Template
+
+### How to run tests on a local chain
+
+First, clone this repository:
+git clone git@github.com:CommonsSwarm/hatch-template.git
+
+Secondly, go into the repository and use yarn to install dependencies.
+cd hatch-template
+yarn
+
+Thirdly, run the tests with the specified network as localhost
+yarn test --network localhost
+
+
 # 🏗 scaffold-eth
 
 > is everything you need to get started building decentralized applications powered by Ethereum
