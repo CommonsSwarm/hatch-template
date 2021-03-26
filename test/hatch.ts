@@ -18,7 +18,7 @@ describe("Hatch Flow", () => {
   let hatchContext: HatchContext;
 
   before(async () => {
-    hatchContext = await newHatch(log);
+    hatchContext = await newHatch();
   });
 
   context("When max goal is reached", async () => {
