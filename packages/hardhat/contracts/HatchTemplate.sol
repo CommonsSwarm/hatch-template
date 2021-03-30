@@ -130,8 +130,6 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         );
 
         senderStoredAddresses[msg.sender].impactHours = _installImpactHours(senderStoredAddresses[msg.sender].dao, _ihToken, _hatch, _maxIHRate, _expectedRaise);
-
-        _createTokenManagerPermissions();
         senderStoredAddresses[msg.sender].acl.createPermission(ANY_ENTITY, senderStoredAddresses[msg.sender].impactHours, senderStoredAddresses[msg.sender].impactHours.CLOSE_HATCH_ROLE(), address(this));
     }
 
@@ -175,6 +173,8 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         
         MigrationTools migrationTools = _installMigrationTools(dao, tokenManager, senderStoredAddresses[msg.sender].reserveAgent, senderStoredAddresses[msg.sender].fundingPoolAgent);
         acl.createPermission(dandelionVoting, migrationTools, migrationTools.MIGRATE_ROLE(), dandelionVoting);
+
+        _createTokenManagerPermissions(redemptions);
 
         // Grant permission for redemptions and migration tools to tranfer on reserveAgent
         acl.createPermission(redemptions, senderStoredAddresses[msg.sender].reserveAgent, senderStoredAddresses[msg.sender].reserveAgent.TRANSFER_ROLE(), this);
@@ -337,7 +337,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         _acl.createPermission(ANY_ENTITY, _migrationTools, _migrationTools.MIGRATE_ROLE(), _dandelionVoting);
     }
 
-    function _createTokenManagerPermissions() internal {
+    function _createTokenManagerPermissions(Redemptions _redemptions) internal {
         (, ACL acl, DandelionVoting dandelionVoting,, TokenManager tokenManager,) = _getStoredAddressesTxOne();
         (, Hatch hatch, ImpactHours impactHours) = _getStoredAddressesTxTwo();
 
@@ -345,7 +345,9 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         acl.createPermission(hatch, tokenManager, tokenManager.ISSUE_ROLE(), dandelionVoting);
         acl.createPermission(hatch, tokenManager, tokenManager.ASSIGN_ROLE(), dandelionVoting);
         acl.createPermission(hatch, tokenManager, tokenManager.REVOKE_VESTINGS_ROLE(), dandelionVoting);
-        acl.createPermission(hatch, tokenManager, tokenManager.BURN_ROLE(), dandelionVoting);
+        acl.createPermission(hatch, tokenManager, tokenManager.BURN_ROLE(), this);
+        acl.grantPermission(_redemptions, tokenManager, tokenManager.BURN_ROLE());
+        acl.setPermissionManager(dandelionVoting, tokenManager, tokenManager.BURN_ROLE());
     }
 
     function _createHatchPermissions() internal {

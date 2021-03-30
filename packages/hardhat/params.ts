@@ -55,9 +55,9 @@ const HATCH_EXCHANGE_RATE = BigNumber.from(10000 * PPM)
   .mul(ONE_TOKEN)
   .div(FUNDRAISING_ONE_TOKEN);
 // When does the cliff for vesting restrictions end
-const VESTING_CLIFF_PERIOD = HATCH_PERIOD + 365 * DAYS; // 1 year after hatch
+const VESTING_CLIFF_PERIOD = HATCH_PERIOD + 7 * DAYS; // 1 week after hatch
 // When will the Hatchers be fully vested and able to use the redemptions app
-const VESTING_COMPLETE_PERIOD = VESTING_CLIFF_PERIOD + 1; // 1 year and 1 second after hatch
+const VESTING_COMPLETE_PERIOD = VESTING_CLIFF_PERIOD + 1; // 1 week and 1 second after hatch
 // What percentage of Hatch contributions should go to the Funding Pool and therefore be non refundable
 const HATCH_TRIBUTE = 0.05 * FUNDRAISING_ONE_HUNDRED_PERCENT;
 // when should the Hatch open, setting 0 will allow anyone to open the Hatch anytime after deployment

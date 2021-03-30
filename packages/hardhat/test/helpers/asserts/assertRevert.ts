@@ -7,7 +7,6 @@ async function assertThrows(blockOrPromise, expectedErrorCode, expectedReason) {
   try {
     typeof blockOrPromise === "function" ? await blockOrPromise() : await blockOrPromise;
   } catch (error) {
-    console.log(error);
     const errorMatchesExpected = error.message.search(expectedErrorCode) > -1;
     assert(errorMatchesExpected, `Expected error code "${expectedErrorCode}" but failed with "${error}" instead.`);
     return error;

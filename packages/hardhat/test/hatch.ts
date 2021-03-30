@@ -7,7 +7,7 @@ import { userContext, UserContext } from "./helpers/user-context"
 import { solidity } from "ethereum-waffle";
 
 import newHatch, { HatchAddresses } from "../scripts/new-hatch";
-import { BigNumber } from "@ethersproject/bignumber";
+import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import {
   getStateByKey,
   STATE_CLOSED,
@@ -66,7 +66,7 @@ describe("Hatch Flow", () => {
     });
 
     it("contributes with a max goal amount to the hatch", async () => {
-      const { hatch, contributionToken, signer: hatchUser, redemptions } = userContext1;
+      const { hatch, contributionToken, signer: hatchUser } = userContext1;
       userContribution = await hatch.maxGoal();
       totalContributed = userContribution;
       await contributionToken.approve(hatch.address, userContribution);
@@ -159,30 +159,43 @@ describe("Hatch Flow", () => {
         HATCH_ERRORS.ERROR_WRONG_SUPPLY_OFFERED_DISTRIBUTION
       );
     });
-  
-    xit("redeems contributor's token amount", async () => {
-      const { hatchToken, contributionToken, redemptions } = userContext1;
-      const previousBalance = await contributionToken.balanceOf(USER1);
 
-      const tx = await redemptions.redeem(await hatchToken.balanceOf(USER1));
+    it("should not redeem tokens for non-contributors", async () => {
+      const { redemptions } = userContext2;
+      await assertRevert(redemptions.redeem(1), "REDEMPTIONS_CANNOT_REDEEM_ZERO");
+    });
+  
+    it("redeems contributor's token amount", async () => {
+      const { hatch, hatchToken, contributionToken, redemptions, tokenManager } = userContext1;
+      const previousContributionBalance = await contributionToken.balanceOf(USER1);
+      const previousHatchBalance = await hatchToken.balanceOf(USER1)
+      const previousRedeemableFunds = (await hatch.totalRaised()).mul(PPM.sub(await hatch.fundingForBeneficiaryPct())).div(PPM)
+      const previousTotalHatchSupply = await hatchToken.totalSupply()
+
+      const applyPct = (amount: BigNumber, pct: BigNumberish) => amount.mul(pct).div(100)
+
+      increase(await hatch.vestingCompletePeriod())
+
+      assertBn(await tokenManager.spendableBalanceOf(USER1), previousHatchBalance);
+      const tx = await redemptions.redeem(applyPct(previousHatchBalance, 10));
       await tx.wait();
 
+      const redeemedAmount = applyPct(previousHatchBalance, 10).mul(previousRedeemableFunds).div(previousTotalHatchSupply)
+
+      const currentContributionBalance = await contributionToken.balanceOf(USER1)
+      const currentHatchBalance = await hatchToken.balanceOf(USER1)
+
       assertBn(
-        await contributionToken.balanceOf(USER1),
-        previousBalance.add(userContribution),
+        currentContributionBalance,
+        previousContributionBalance.add(redeemedAmount),
         REDEMPTIONS_ERRORS.ERROR_CONTRIBUTION_NOT_REDEEM
       );
 
       assertBn(
-        await hatchToken.balanceOf(USER1),
-        BigNumber.from(0),
+        currentHatchBalance,
+        applyPct(previousHatchBalance, 90),
         REDEMPTIONS_ERRORS.ERROR_REDEEMED_TOKENS_NOT_BURNED
       );
-    });
-  
-    xit("should not redeem tokens for non-contributors", async () => {
-      const { redemptions } = userContext2;
-      await assertRevert(redemptions.redeem(userContribution), "REDEMPTIONS_CANNOT_REDEEM_ZERO");
     });
 
     describe('migration', async() => {
