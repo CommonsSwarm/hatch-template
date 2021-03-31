@@ -33,29 +33,29 @@ const HATCH_ORACLE_RATIO = BigNumber.from(0.8 * PPM)
 
 // # Dandelion Voting Settings
 // Used for administrative or binary choice decisions with ragequit-like functionality on Dandelion Voting
-const VOTE_DURATION = 10 // Alternatively: 3 * DAYS;
-const VOTE_BUFFER = 3 * DAYS;
-const VOTE_EXECUTION_DELAY = 5 // Alternatively: 24 * HOURS;
-const SUPPORT_REQUIRED = String(0.6 * ONE_HUNDRED_PERCENT);
-const MIN_ACCEPTANCE_QUORUM = String(0.02 * ONE_HUNDRED_PERCENT);
+const VOTE_DURATION = 3 * DAYS // Alternatively: 3 * DAYS;
+const VOTE_BUFFER = 4 * HOURS;
+const VOTE_EXECUTION_DELAY = 24 * HOURS // Alternatively: 24 * HOURS;
+const SUPPORT_REQUIRED = String(0.8 * ONE_HUNDRED_PERCENT);
+const MIN_ACCEPTANCE_QUORUM = String(0.01 * ONE_HUNDRED_PERCENT);
 
 // Set the fee paid to the org to create an administrative vote
-const TOLLGATE_FEE = BigNumber.from(3).mul(ONE_TOKEN);
+const TOLLGATE_FEE = BigNumber.from(5).mul(ONE_TOKEN);
 
 // # Hatch settings
 
 // How many COLLATERAL_TOKEN's are required to Hatch
 const HATCH_MIN_GOAL = BigNumber.from(5).mul(ONE_TOKEN);
 // What is the Max number of COLLATERAL_TOKEN's the Hatch can recieve
-const HATCH_MAX_GOAL = BigNumber.from(1000).mul(ONE_TOKEN);
+const HATCH_MAX_GOAL = BigNumber.from(500).mul(ONE_TOKEN);
 // How long should the hatch period last
-const HATCH_PERIOD = 15 * DAYS;
+const HATCH_PERIOD = 5 * DAYS;
 // How many organization tokens should be minted per collateral token
-const HATCH_EXCHANGE_RATE = BigNumber.from(10000 * PPM)
+const HATCH_EXCHANGE_RATE = BigNumber.from(1 * PPM)
   .mul(ONE_TOKEN)
   .div(FUNDRAISING_ONE_TOKEN);
 // When does the cliff for vesting restrictions end
-const VESTING_CLIFF_PERIOD = HATCH_PERIOD + 7 * DAYS; // 1 week after hatch
+const VESTING_CLIFF_PERIOD = HATCH_PERIOD + 1 * DAYS; // This is now the Refund period and it needs to always be 1 week for safty
 // When will the Hatchers be fully vested and able to use the redemptions app
 const VESTING_COMPLETE_PERIOD = VESTING_CLIFF_PERIOD + 1; // 1 week and 1 second after hatch
 // What percentage of Hatch contributions should go to the Funding Pool and therefore be non refundable
@@ -68,12 +68,12 @@ const OPEN_DATE = 0;
 // Impact Hours token address
 const IH_TOKEN = "0xdf2c3c8764a92eb43d2eea0a4c2d77c2306b0835";
 // Max theoretical collateral token rate per impact hour
-const MAX_IH_RATE = BigNumber.from(100).mul(ONE_TOKEN);
+const MAX_IH_RATE = BigNumber.from(.02 * PPM).mul(ONE_TOKEN).div(PPM); // Big number games... leave the "* 1000"
 
 // How much will we need to raise to reach 1/2 of the MAX_IH_RATE divided by total IH
-const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
+const EXPECTED_RAISE_PER_IH = BigNumber.from(0.01 * PPM)  // Big number games... leave the "* 1000"
   .mul(ONE_TOKEN)
-  .div(1000);
+  .div(PPM);
 
 const getParams = (blockTime = DEFAULT_CHAIN) => ({
   HOURS,
