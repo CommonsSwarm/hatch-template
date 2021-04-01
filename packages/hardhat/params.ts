@@ -11,101 +11,105 @@ const DAYS = 24 * HOURS;
 const ONE_HUNDRED_PERCENT = 1e18;
 const ONE_TOKEN = BigNumber.from((1e18).toString());
 const FUNDRAISING_ONE_HUNDRED_PERCENT = 1e6;
-const FUNDRAISING_ONE_TOKEN = BigNumber.from((1e18).toString());
+const fundraisingOneToken = params => BigNumber.from((10 ** params.collateralTokenDecimals).toString());
 const PPM = 1000000;
 
 // Collateral Token is used to pay contributors and held in the bonding curve reserve
-const COLLATERAL_TOKEN = "0xfb8f60246d56905866e12443ec0836ebfb3e1f2e"; // tDAI
+const collateralToken = params => params.collateralToken; // wxDAI
 
 // Org Token represents membership in the community and influence in proposals
-const ORG_TOKEN_NAME = "Token Engineering Commons TEST Hatch Token";
-const ORG_TOKEN_SYMBOL = "TESTTECH";
+const orgTokenName = params => params.orgTokenName;
+const orgTokenSymbol = params => params.orgTokenSymbol;
 
 // # Hatch Oracle Settings
 
 // Score membership token is used to check how much members can contribute to the hatch
-const SCORE_TOKEN = "0xc4fbe68522ba81a28879763c3ee33e08b13c499e"; // CSTK Token on xDai
-const SCORE_ONE_TOKEN = BigNumber.from(1);
+const scoreToken = params => params.scoreToken; // CSTK Token on xDai
+const scoreOneToken = params => BigNumber.from(10 ** params.scoreTokenDecimals);
 // Ratio contribution tokens allowed per score membership token
-const HATCH_ORACLE_RATIO = BigNumber.from(0.8 * PPM)
-  .mul(FUNDRAISING_ONE_TOKEN)
-  .div(SCORE_ONE_TOKEN);
+const hatchOracleRatio = params => BigNumber.from(params.hatchOracleRatio * PPM)
+  .mul(fundraisingOneToken(params))
+  .div(scoreOneToken(params));
 
 // # Dandelion Voting Settings
 // Used for administrative or binary choice decisions with ragequit-like functionality on Dandelion Voting
-const VOTE_DURATION = 10 // Alternatively: 3 * DAYS;
-const VOTE_BUFFER = 3 * DAYS;
-const VOTE_EXECUTION_DELAY = 5 // Alternatively: 24 * HOURS;
-const SUPPORT_REQUIRED = String(0.6 * ONE_HUNDRED_PERCENT);
-const MIN_ACCEPTANCE_QUORUM = String(0.02 * ONE_HUNDRED_PERCENT);
+const voteDuration = params => params.voteDurationDays * DAYS // Alternatively: 3 * DAYS;
+const voteBuffer = params => params.voteBufferHours * HOURS;
+const voteExecutionDelay = params => params.rageQuitHours * HOURS // Alternatively: 24 * HOURS;
+const supportRequired = params => String(params.supportRequired * ONE_HUNDRED_PERCENT);
+const minAcceptQuorum = params => String(params.minAcceptQuorum * ONE_HUNDRED_PERCENT);
 
 // Set the fee paid to the org to create an administrative vote
-const TOLLGATE_FEE = BigNumber.from(3).mul(ONE_TOKEN);
+const tollgateFee = params => BigNumber.from(params.tollgateFee).mul(ONE_TOKEN);
 
 // # Hatch settings
 
 // How many COLLATERAL_TOKEN's are required to Hatch
-const HATCH_MIN_GOAL = BigNumber.from(5).mul(ONE_TOKEN);
+const hatchMinGoal = params => BigNumber.from(params.hatchMinGoal).mul(ONE_TOKEN);
 // What is the Max number of COLLATERAL_TOKEN's the Hatch can recieve
-const HATCH_MAX_GOAL = BigNumber.from(1000).mul(ONE_TOKEN);
+const hatchMaxGoal = params => BigNumber.from(params.hatchMaxGoal).mul(ONE_TOKEN);
 // How long should the hatch period last
-const HATCH_PERIOD = 15 * DAYS;
+const hatchPeriod = params => params.hatchPeriodDays * DAYS;
 // How many organization tokens should be minted per collateral token
-const HATCH_EXCHANGE_RATE = BigNumber.from(10000 * PPM)
+const hatchExchangeRate = params => BigNumber.from(params.hatchMintRate * PPM)
   .mul(ONE_TOKEN)
-  .div(FUNDRAISING_ONE_TOKEN);
+  .div(fundraisingOneToken(params));
 // When does the cliff for vesting restrictions end
-const VESTING_CLIFF_PERIOD = HATCH_PERIOD + 7 * DAYS; // 1 week after hatch
+const vestingCliffPeriod = params => hatchPeriod(params) + params.refundPeriodDays * DAYS; // This is now the Refund period
 // When will the Hatchers be fully vested and able to use the redemptions app
-const VESTING_COMPLETE_PERIOD = VESTING_CLIFF_PERIOD + 1; // 1 week and 1 second after hatch
+const vestingCompletePeriod = params => vestingCliffPeriod(params) + 1; // 1 week and 1 second after hatch
 // What percentage of Hatch contributions should go to the Funding Pool and therefore be non refundable
-const HATCH_TRIBUTE = 0.05 * FUNDRAISING_ONE_HUNDRED_PERCENT;
+const hatchTribute = params => params.hatchTribute * FUNDRAISING_ONE_HUNDRED_PERCENT;
 // when should the Hatch open, setting 0 will allow anyone to open the Hatch anytime after deployment
 const OPEN_DATE = 0;
 
 // # Impact hours settings
 
 // Impact Hours token address
-const IH_TOKEN = "0xdf2c3c8764a92eb43d2eea0a4c2d77c2306b0835";
+const ihToken = params => params.ihToken;
 // Max theoretical collateral token rate per impact hour
-const MAX_IH_RATE = BigNumber.from(100).mul(ONE_TOKEN);
+const maxIHRate = params => BigNumber.from(params.maxIHRate * PPM).mul(ONE_TOKEN).div(PPM);
 
 // How much will we need to raise to reach 1/2 of the MAX_IH_RATE divided by total IH
-const EXPECTED_RAISE_PER_IH = BigNumber.from(0.012 * 1000)
+const expectedRaisePerIH = params => BigNumber.from(params.ihSlope * PPM)
   .mul(ONE_TOKEN)
-  .div(1000);
+  .div(PPM);
 
-const getParams = (blockTime = DEFAULT_CHAIN) => ({
-  HOURS,
-  DAYS,
-  ONE_HUNDRED_PERCENT,
-  ONE_TOKEN,
-  FUNDRAISING_ONE_HUNDRED_PERCENT,
-  FUNDRAISING_ONE_TOKEN,
-  PPM,
-  COLLATERAL_TOKEN,
-  ORG_TOKEN_NAME,
-  ORG_TOKEN_SYMBOL,
-  SCORE_TOKEN,
-  SCORE_ONE_TOKEN,
-  HATCH_ORACLE_RATIO,
-  TOLLGATE_FEE,
-  HATCH_MIN_GOAL,
-  HATCH_MAX_GOAL,
-  HATCH_PERIOD,
-  HATCH_EXCHANGE_RATE,
-  VESTING_CLIFF_PERIOD,
-  VESTING_COMPLETE_PERIOD,
-  HATCH_TRIBUTE,
-  OPEN_DATE,
-  IH_TOKEN,
-  MAX_IH_RATE,
-  EXPECTED_RAISE_PER_IH,
-  SUPPORT_REQUIRED,
-  MIN_ACCEPTANCE_QUORUM,
-  VOTE_DURATION_BLOCKS: VOTE_DURATION / blockTime,
-  VOTE_BUFFER_BLOCKS: VOTE_BUFFER / blockTime,
-  VOTE_EXECUTION_DELAY_BLOCKS: VOTE_EXECUTION_DELAY / blockTime,
-});
+const getParams = async (blockTime = DEFAULT_CHAIN) => {
+
+  const params = await import("./params-localhost.json");
+  return {
+    HOURS,
+    DAYS,
+    ONE_HUNDRED_PERCENT,
+    ONE_TOKEN,
+    FUNDRAISING_ONE_HUNDRED_PERCENT,
+    fundraisingOneToken: fundraisingOneToken(params),
+    PPM,
+    collateralToken: collateralToken(params),
+    orgTokenName: orgTokenName(params),
+    orgTokenSymbol: orgTokenSymbol(params),
+    scoreToken: scoreToken(params),
+    scoreOneToken: scoreOneToken(params),
+    hatchOracleRatio: hatchOracleRatio(params),
+    tollgateFee: tollgateFee(params),
+    hatchMinGoal: hatchMinGoal(params),
+    hatchMaxGoal: hatchMaxGoal(params),
+    hatchPeriod: hatchPeriod(params),
+    hatchExchangeRate: hatchExchangeRate(params),
+    vestingCliffPeriod: vestingCliffPeriod(params),
+    vestingCompletePeriod: vestingCompletePeriod(params),
+    hatchTribute: hatchTribute(params),
+    openDate: OPEN_DATE,
+    ihToken: ihToken(params),
+    maxIHRate: maxIHRate(params),
+    ihSlope: expectedRaisePerIH(params),
+    supportRequired: supportRequired(params),
+    minAcceptQuorum: minAcceptQuorum(params),
+    voteDurationBlocks: voteDuration(params) / blockTime,
+    voteBufferBlocks: voteBuffer(params) / blockTime,
+    voteExecutionDelayBlocks: voteExecutionDelay(params) / blockTime,
+  }
+};
 
 export default getParams;

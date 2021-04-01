@@ -27,35 +27,37 @@ const argValue = (arg, defaultValue) =>
 const network = () => argValue(NETWORK_ARG, "local");
 const daoId = () => argValue(DAO_ID_ARG, DAO_ID);
 
-const BLOCKTIME = network() === "rinkeby" ? 15 : network() === "mainnet" ? 13 : 5; // 15 rinkeby, 13 mainnet, 5 xdai
+const blockTime = network() === "rinkeby" ? 15 : network() === "mainnet" ? 13 : 5; // 15 rinkeby, 13 mainnet, 5 xdai
 
-console.log(`Every ${BLOCKTIME}s a new block is mined in ${network()}.`);
+console.log(`Every ${blockTime}s a new block is mined in ${network()}.`);
+
+export default async function main(log = console.log): Promise<HatchAddresses> {
 
 const {
-  ORG_TOKEN_NAME,
-  ORG_TOKEN_SYMBOL,
-  SUPPORT_REQUIRED,
-  MIN_ACCEPTANCE_QUORUM,
-  VOTE_DURATION_BLOCKS,
-  VOTE_BUFFER_BLOCKS,
-  VOTE_EXECUTION_DELAY_BLOCKS,
-  COLLATERAL_TOKEN,
-  IH_TOKEN,
-  EXPECTED_RAISE_PER_IH,
+  orgTokenName,
+  orgTokenSymbol,
+  supportRequired,
+  minAcceptQuorum,
+  voteDurationBlocks,
+  voteBufferBlocks,
+  voteExecutionDelayBlocks,
+  collateralToken,
+  ihToken,
+  ihSlope,
   ONE_TOKEN,
-  HATCH_MIN_GOAL,
-  HATCH_MAX_GOAL,
-  HATCH_PERIOD,
-  HATCH_EXCHANGE_RATE,
-  VESTING_CLIFF_PERIOD,
-  VESTING_COMPLETE_PERIOD,
-  HATCH_TRIBUTE,
-  OPEN_DATE,
-  MAX_IH_RATE,
-  TOLLGATE_FEE,
-  SCORE_TOKEN,
-  HATCH_ORACLE_RATIO,
-} = getParams(BLOCKTIME);
+  hatchMinGoal,
+  hatchMaxGoal,
+  hatchPeriod,
+  hatchExchangeRate,
+  vestingCliffPeriod,
+  vestingCompletePeriod,
+  hatchTribute,
+  openDate,
+  maxIHRate,
+  tollgateFee,
+  scoreToken,
+  hatchOracleRatio,
+} = await getParams(blockTime);
 
 const hatchTemplateAddress = async () => (await deployments.get("HatchTemplate")).address;
 
@@ -77,10 +79,10 @@ const getAddress = async (selectedFilter: string, contract: Contract, transactio
 
 const createDaoTxOne = async (hatchTemplate: HatchTemplate, log: Function): Promise<string> => {
   const tx = await hatchTemplate.createDaoTxOne(
-    ORG_TOKEN_NAME,
-    ORG_TOKEN_SYMBOL,
-    [SUPPORT_REQUIRED, MIN_ACCEPTANCE_QUORUM, VOTE_DURATION_BLOCKS, VOTE_BUFFER_BLOCKS, VOTE_EXECUTION_DELAY_BLOCKS],
-    COLLATERAL_TOKEN
+    orgTokenName,
+    orgTokenSymbol,
+    [supportRequired, minAcceptQuorum, voteDurationBlocks, voteBufferBlocks, voteExecutionDelayBlocks],
+    collateralToken
   );
 
   await tx.wait();
@@ -93,22 +95,22 @@ const createDaoTxOne = async (hatchTemplate: HatchTemplate, log: Function): Prom
 };
 
 const createDaoTxTwo = async (hatchTemplate: HatchTemplate, log: Function): Promise<void> => {
-  const impactHoursToken = (await ethers.getContractAt("MiniMeToken", IH_TOKEN)) as MiniMeToken;
+  const impactHoursToken = (await ethers.getContractAt("MiniMeToken", ihToken)) as MiniMeToken;
 
   const totalImpactHours = await impactHoursToken.totalSupply();
-  const expectedRaise = EXPECTED_RAISE_PER_IH.mul(totalImpactHours).div(ONE_TOKEN);
+  const expectedRaise = ihSlope.mul(totalImpactHours).div(ONE_TOKEN);
 
   const tx = await hatchTemplate.createDaoTxTwo(
-    HATCH_MIN_GOAL,
-    HATCH_MAX_GOAL,
-    HATCH_PERIOD,
-    HATCH_EXCHANGE_RATE,
-    VESTING_CLIFF_PERIOD,
-    VESTING_COMPLETE_PERIOD,
-    HATCH_TRIBUTE,
-    OPEN_DATE,
-    IH_TOKEN,
-    MAX_IH_RATE,
+    hatchMinGoal,
+    hatchMaxGoal,
+    hatchPeriod,
+    hatchExchangeRate,
+    vestingCliffPeriod,
+    vestingCompletePeriod,
+    hatchTribute,
+    openDate,
+    ihToken,
+    maxIHRate,
     expectedRaise
   );
 
@@ -120,11 +122,11 @@ const createDaoTxTwo = async (hatchTemplate: HatchTemplate, log: Function): Prom
 const createDaoTxThree = async (hatchTemplate: HatchTemplate, log: Function): Promise<void> => {
   const tx = await hatchTemplate.createDaoTxThree(
     daoId(),
-    [COLLATERAL_TOKEN],
-    COLLATERAL_TOKEN,
-    TOLLGATE_FEE,
-    SCORE_TOKEN,
-    HATCH_ORACLE_RATIO
+    [collateralToken],
+    collateralToken,
+    tollgateFee,
+    scoreToken,
+    hatchOracleRatio
   );
 
   await tx.wait();
@@ -132,7 +134,7 @@ const createDaoTxThree = async (hatchTemplate: HatchTemplate, log: Function): Pr
   log(`Tx three completed: Tollgate, Hatch Oracle, Redemptions and Migration Tools apps set up.`);
 };
 
-export default async function main(log = console.log): Promise<HatchAddresses> {
+
   const appManager = await ethers.getSigners()[0];
 
   const hatchTemplate = await getHatchTemplate(appManager)
