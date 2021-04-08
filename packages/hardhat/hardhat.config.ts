@@ -141,7 +141,7 @@ const config: HardhatUserConfig = {
       },
     },
     xdai: {
-      url: "https://rpc.xdaichain.com/",
+      url: "https://xdai.1hive.org/",
       gasPrice: 1000000000,
       accounts: {
         mnemonic: mnemonic(),
