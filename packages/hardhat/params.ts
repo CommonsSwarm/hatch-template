@@ -1,9 +1,10 @@
-import { ethers } from "ethers";
+import hre, { ethers } from "hardhat";
 
 const { BigNumber } = ethers;
 
 // xdai as default network.
 const DEFAULT_CHAIN = 5;
+const network = hre.network.name === 'localhost' ? 'xdai' : hre.network.name
 
 // Helpers, no need to change
 const HOURS = 60 * 60;
@@ -55,7 +56,7 @@ const hatchExchangeRate = params => BigNumber.from(params.hatchMintRate * PPM)
   .mul(ONE_TOKEN)
   .div(fundraisingOneToken(params));
 // When does the cliff for vesting restrictions end
-const vestingCliffPeriod = params => hatchPeriod(params) + params.refundPeriodDays * DAYS; // This is now the Refund period
+const vestingCliffPeriod = params => Math.floor(hatchPeriod(params) + params.refundPeriodDays * DAYS); // This is now the Refund period
 // When will the Hatchers be fully vested and able to use the redemptions app
 const vestingCompletePeriod = params => vestingCliffPeriod(params) + 1; // 1 week and 1 second after hatch
 // What percentage of Hatch contributions should go to the Funding Pool and therefore be non refundable
@@ -77,7 +78,7 @@ const expectedRaisePerIH = params => BigNumber.from(params.ihSlope * PPM)
 
 const getParams = async (blockTime = DEFAULT_CHAIN) => {
 
-  const params = await import("./params-localhost.json");
+  const params = await import(`./params-${network}.json`);
   return {
     HOURS,
     DAYS,
