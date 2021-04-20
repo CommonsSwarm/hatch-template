@@ -1,8 +1,8 @@
-import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
+import { BigNumber } from "@ethersproject/bignumber";
 import { ContractTransaction, Overrides } from "@ethersproject/contracts";
 import fetch from "node-fetch";
 
-import { ERC20, IHatch, IImpactHours, MiniMeToken } from "../../typechain/index";
+import { ERC20, IHatch, IImpactHours, MigrationTools, MiniMeToken } from "../../typechain/index";
 
 export const ZERO_ADDRESS = '0x' + '0'.repeat(40) // 0x0000...0000
 
@@ -50,22 +50,24 @@ export const getContributors = async (tokenAddress: string): Promise<string[]> =
   return fetch(`https://blockscout.com/xdai/mainnet/api?module=token&action=getTokenHolders&contractaddress=${tokenAddress}&offset=1000`)
     .then(res => res.json())
     .then(res => res.result.map(({ address }) => address))
+  // return Promise.resolve(res.result.map(({ address }) => address))
 };
 
-export const claimRewards = async (impactHours: IImpactHours, impactHoursToken: MiniMeToken, overrides?: Overrides): Promise<void> => {
+export const claimTokens = async (claimableContract: IImpactHours | MigrationTools, token: MiniMeToken, overrides?: Overrides): Promise<void> => {
+  const claim = claimableContract.claimReward || claimableContract.claimForMany 
   const CONTRIBUTORS_PROCESSED_PER_TRANSACTION = 10;
-  const contributors = await getContributors(impactHoursToken.address);
+  const contributors = await getContributors(token.address);
   const total = Math.ceil(contributors.length / CONTRIBUTORS_PROCESSED_PER_TRANSACTION);
   let counter = 1;
   let tx;
 
   for (let i = 0; i < contributors.length; i += CONTRIBUTORS_PROCESSED_PER_TRANSACTION) {
-    tx = await impactHours.claimReward(contributors.slice(i, i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION), overrides);
+    tx = await claim(contributors.slice(i, i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION), overrides);
 
     await tx.wait();
 
     log(
-      `Tx ${counter++} of ${total}: Rewards claimed for IH token holders ${i + 1} to ${Math.min(
+      `Tx ${counter++} of ${total}: Claimed for token holders ${i + 1} to ${Math.min(
         i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION,
         contributors.length
       )}.`,
