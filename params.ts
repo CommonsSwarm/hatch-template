@@ -4,7 +4,7 @@ const { BigNumber } = ethers;
 
 // xdai as default network.
 const DEFAULT_CHAIN = 5;
-const network = hre.network.name === 'localhost' ? 'xdai' : hre.network.name
+const network = hre.network.name
 
 // Helpers, no need to change
 const HOURS = 60 * 60;
@@ -13,7 +13,7 @@ const ONE_HUNDRED_PERCENT = 1e18;
 const ONE_TOKEN = BigNumber.from((1e18).toString());
 const FUNDRAISING_ONE_HUNDRED_PERCENT = 1e6;
 const fundraisingOneToken = params => BigNumber.from((10 ** params.collateralTokenDecimals).toString());
-const PPM = 1000000;
+export const PPM = 1000000;
 
 // Collateral Token is used to pay contributors and held in the bonding curve reserve
 const collateralToken = params => params.collateralToken; // wxDAI
@@ -34,9 +34,9 @@ const hatchOracleRatio = params => BigNumber.from(params.hatchOracleRatio * PPM)
 
 // # Dandelion Voting Settings
 // Used for administrative or binary choice decisions with ragequit-like functionality on Dandelion Voting
-const voteDuration = params => params.voteDurationDays * DAYS // Alternatively: 3 * DAYS;
-const voteBuffer = params => params.voteBufferHours * HOURS;
-const voteExecutionDelay = params => params.rageQuitHours * HOURS // Alternatively: 24 * HOURS;
+const voteDuration = params => Math.floor(params.voteDurationDays * DAYS) // Alternatively: 3 * DAYS;
+const voteBuffer = params => Math.floor(params.voteBufferHours * HOURS);
+const voteExecutionDelay = params => Math.floor(params.rageQuitHours * HOURS) // Alternatively: 24 * HOURS;
 const supportRequired = params => String(params.supportRequired * ONE_HUNDRED_PERCENT);
 const minAcceptQuorum = params => String(params.minAcceptQuorum * ONE_HUNDRED_PERCENT);
 
