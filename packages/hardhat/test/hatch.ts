@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 import { use, assert } from "chai";
 import { ContractTransaction } from "ethers";
 import { assertBn, assertRevert } from "./helpers/asserts";
-import { calculateRewards, claimRewards, contributeToHatch, log } from "./helpers/helpers";
+import { calculateRewards, claimTokens, contributeToHatch, log } from "./helpers/helpers";
 import { userContext, UserContext } from "./helpers/user-context"
 import { solidity } from "ethereum-waffle";
 
@@ -17,12 +17,11 @@ import {
 } from "./helpers/hatch-states";
 import { HATCH_ERRORS, IMPACT_HOURS_ERRORS, REDEMPTIONS_ERRORS, TOKEN_ERRORS } from "./helpers/errors";
 import { impersonateAddress, increase, duration, restoreSnapshot, takeSnapshot } from "../helpers/rpc";
-import getParams from "../params";
+import { PPM as ppm } from "../params";
 import { newMigrableDao } from "./helpers/migrable-dao";
 import { encodeActCall, encodeCallScript } from './helpers/aragon-os'
 import { MigrationTools, MiniMeToken, Vault } from "../typechain";
 
-const { PPM: ppm } = getParams();
 const PPM = BigNumber.from(ppm);
 
 use(solidity);
@@ -97,7 +96,7 @@ describe("Hatch Flow", () => {
       const expectedHatchTokens = await hatch.contributionToTokens(totalIHRewards);
       const hatchTokenTotalSupply = await hatchToken.totalSupply();
 
-      await claimRewards(impactHours, impactHoursToken);
+      await claimTokens(impactHours, impactHoursToken);
 
       assert.isTrue(
         hatchTokenTotalSupply
