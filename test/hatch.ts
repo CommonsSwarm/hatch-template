@@ -29,7 +29,6 @@ use(solidity);
 // Addresses with contribution tokens to perform hatch operations
 const USER1 = "0xDc2aDfA800a1ffA16078Ef8C1F251D50DcDa1065";
 const USER2 = "0x5b7575494b1e28974efe6ea71ec569b34958f72e";
-const USER3 = "0x839395e20bbb182fa440d08f850e6c7a8f6f0780";
 const MIN_NEGLIGIBLE_AMOUNT = ethers.BigNumber.from(String("10000000"));
 
 describe("Hatch Flow", () => {
@@ -86,6 +85,18 @@ describe("Hatch Flow", () => {
 
       assert.equal(getStateByKey(await hatch.state()), STATE_GOAL_REACHED, HATCH_ERRORS.ERROR_HATCH_GOAL_NOT_REACHED);
     });
+
+    it("doesn't allow to create votes before the hatch is closed", async() => {
+      const { dandelionVoting, contributionToken, tollgate } = userContext1;
+      const voteScript = encodeCallScript([{
+        to: dandelionVoting.address,
+        calldata: encodeActCall('newVote(bytes,string,bool)', ['0x', '', false]),
+      }])
+      const [tollgateToken, tollgateFee] = await tollgate.forwardFee()
+      assert.equal(tollgateToken, contributionToken.address)
+      await contributionToken.approve(tollgate.address, tollgateFee)
+      await assertRevert(tollgate.forward(voteScript), 'APP_AUTH_FAILED')
+    })
   
     it("claims the impact hours for all contributors", async () => {
       const { hatch, impactHours, impactHoursToken, impactHoursClonedToken, hatchToken } = userContext1;
@@ -161,7 +172,7 @@ describe("Hatch Flow", () => {
 
     it("should not redeem tokens for non-contributors", async () => {
       const { redemptions } = userContext2;
-      await assertRevert(redemptions.redeem(1), "REDEMPTIONS_CANNOT_REDEEM_ZERO");
+      await assertRevert(redemptions.redeem(1), "REDEMPTIONS_INSUFFICIENT_BALANCE");
     });
   
     it("redeems contributor's token amount", async () => {
@@ -217,6 +228,7 @@ describe("Hatch Flow", () => {
         }])
         const [tollgateToken, tollgateFee] = await tollgate.forwardFee()
         assert.equal(tollgateToken, contributionToken.address)
+        await contributionToken.approve(tollgate.address, 0)
         await contributionToken.approve(tollgate.address, tollgateFee)
         await (await tollgate.forward(voteScript)).wait()
         const vote = await dandelionVoting.getVote(1)

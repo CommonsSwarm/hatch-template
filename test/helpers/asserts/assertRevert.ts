@@ -8,11 +8,11 @@ async function assertThrows(blockOrPromise, expectedErrorCode, expectedReason) {
     typeof blockOrPromise === "function" ? await blockOrPromise() : await blockOrPromise;
   } catch (error) {
     const errorMatchesExpected = error.message.search(expectedErrorCode) > -1;
-    assert(errorMatchesExpected, `Expected error code "${expectedErrorCode}" but failed with "${error}" instead.`);
+    assert.isTrue(errorMatchesExpected, `Expected error code "${expectedErrorCode}" but failed with "${error}" instead.`);
     return error;
   }
   // assert.fail() for some reason does not have its error string printed 🤷
-  assert(
+  assert.isTrue(
     false,
     `Expected "${expectedErrorCode}"${expectedReason ? ` (with reason: "${expectedReason}")` : ""} but it did not fail`
   );

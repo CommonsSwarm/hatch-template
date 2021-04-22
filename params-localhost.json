@@ -18,7 +18,7 @@
   "hatchMintRate": 10000,
   "refundPeriodDays": 7,
   "hatchTribute": 0.05,
-  "ihToken": "0xdf2c3c8764a92eb43d2eea0a4c2d77c2306b0835",
+  "ihToken": "0x40d9247f41812782b378df1ff7ffc0fb27bd25b7",
   "maxIHRate": 0.02,
   "ihSlope": 0.01
 }

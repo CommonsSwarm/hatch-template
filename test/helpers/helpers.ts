@@ -47,15 +47,15 @@ export const getContributors = async (tokenAddress: string): Promise<string[]> =
   // })
   //   .then((res) => res.json())
   //   .then((res) => res.data.tokenHolders.map(({ address }) => address));
-  // return fetch(`https://blockscout.com/xdai/mainnet/api?module=token&action=getTokenHolders&contractaddress=${tokenAddress}&offset=200`)
-  //   .then(res => res.json())
-  //   .then(res => res.result.map(({ address }) => address))
-  const res = await import('./data.json')
-  return Promise.resolve(res.result.map(({ address }) => address))
+  return fetch(`https://blockscout.com/xdai/mainnet/api?module=token&action=getTokenHolders&contractaddress=${tokenAddress}&offset=200`)
+    .then(res => res.json())
+    .then(res => res.result.map(({ address }) => address))
+  // const res = await import('./data.json')
+  // return Promise.resolve(res.result.map(({ address }) => address))
 };
 
 export const claimTokens = async (claimableContract: IImpactHours | MigrationTools, token: MiniMeToken, overrides?: Overrides): Promise<void> => {
-  const claim = claimableContract.claimReward// || claimableContract.claimForMany 
+  const claim = claimableContract.claimReward || claimableContract.claimForMany
   const CONTRIBUTORS_PROCESSED_PER_TRANSACTION = 10;
   const contributors = await getContributors(token.address);
   const total = Math.ceil(contributors.length / CONTRIBUTORS_PROCESSED_PER_TRANSACTION);
