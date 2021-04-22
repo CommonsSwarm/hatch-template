@@ -11,7 +11,7 @@ import {IHatchOracle as HatchOracle} from "./external/IHatchOracle.sol";
 import {IImpactHours as ImpactHours} from "./external/IImpactHours.sol";
 import "./appIds/AppIdsXDai.sol";
 
-contract HatchTemplate is BaseTemplate, AppIdsXDai {
+contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
     using SafeMath64 for uint64;
 
     string constant private ERROR_MISSING_MEMBERS = "MISSING_MEMBERS";
@@ -28,6 +28,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     address private constant ANY_ENTITY = address(-1);
     uint256 private constant ONE_HUNDRED_PERCENT = 1e6;
     uint8 private constant ORACLE_PARAM_ID = 203;
+    uint8 private constant TIMESTAMP_PARAM_ID = 201;
     enum Op { NONE, EQ, NEQ, GT, LT, GTE, LTE, RET, NOT, AND, OR, XOR, IF_ELSE }
 
     struct StoredAddresses {
@@ -41,6 +42,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         Hatch hatch;
         HatchOracle hatchOracle;
         ImpactHours impactHours;
+        Tollgate tollgate;
     }
 
     mapping(address => StoredAddresses) internal senderStoredAddresses;
@@ -96,7 +98,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     * @param _vestingCliffPeriod Vesting cliff length for hatch bought tokens in seconds
     * @param _vestingCompletePeriod Vesting complete length for hatch bought tokens in seconds
     * @param _hatchTributePct Percent of raised hatch funds sent to the organization in PPM
-    * @param _openDate The time the hatch starts, requires manual opening if set to 0
+    * @param _hatchOpenDate The time the hatch starts, requires manual opening if set to 0
     * @param _ihToken Impact hours token address
     * @param _maxIHRate Max theoretical rate per impact hour in Collateral_token per IH
     * @param _expectedRaise How much will we need to raise to reach 1/2 of the MAX_IH_RATE 
@@ -109,7 +111,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         uint64 _vestingCliffPeriod,
         uint64 _vestingCompletePeriod,
         uint256 _hatchTributePct,
-        uint64 _openDate,
+        uint64 _hatchOpenDate,
         address _ihToken,
         uint256 _maxIHRate,
         uint256 _expectedRaise
@@ -126,7 +128,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
             _vestingCliffPeriod,
             _vestingCompletePeriod,
             _hatchTributePct,
-            _openDate
+            _hatchOpenDate
         );
 
         senderStoredAddresses[msg.sender].impactHours = _installImpactHours(senderStoredAddresses[msg.sender].dao, _ihToken, _hatch, _maxIHRate, _expectedRaise);
@@ -139,6 +141,9 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     * @param _redeemableTokens Array of initially redeemable tokens
     * @param _tollgateFeeToken The token used to pay the tollgate fee
     * @param _tollgateFeeAmount The tollgate fee amount
+    * @param _scoreToken Token for Hatch Oracle used to determine contributor allowance
+    * @param _hatchOracleRatio Hatch Oracle ratio used to determine contributor allowance
+    * @param _voteOpenAfterPeriod Time period in which vote creation will not be allowed
     */
     function createDaoTxThree(
         string _id,
@@ -146,7 +151,8 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         ERC20 _tollgateFeeToken,
         uint256 _tollgateFeeAmount,
         address _scoreToken,
-        uint256 _hatchOracleRatio
+        uint256 _hatchOracleRatio,
+        uint64 _voteOpenAfterPeriod
     )
         public
     {
@@ -161,8 +167,8 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         TokenManager tokenManager,
         ) = _getStoredAddressesTxOne();
 
-        Tollgate tollgate = _installTollgate(dao, _tollgateFeeToken, _tollgateFeeAmount, address(senderStoredAddresses[msg.sender].fundingPoolAgent));
-        _createTollgatePermissions(acl, tollgate, dandelionVoting);
+        senderStoredAddresses[msg.sender].tollgate = _installTollgate(dao, _tollgateFeeToken, _tollgateFeeAmount, address(senderStoredAddresses[msg.sender].fundingPoolAgent));
+        _createTollgatePermissions(acl, senderStoredAddresses[msg.sender].tollgate, dandelionVoting, getTimestamp64().add(_voteOpenAfterPeriod));
 
         senderStoredAddresses[msg.sender].hatchOracle = _installHatchOracleApp(dao, _scoreToken, _hatchOracleRatio, senderStoredAddresses[msg.sender].hatch);
         _createHatchPermissions();
@@ -316,10 +322,12 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         _acl.createPermission(_dandelionVoting, _dandelionVoting, _dandelionVoting.MODIFY_EXECUTION_DELAY_ROLE(), _dandelionVoting);
     }
 
-    function _createTollgatePermissions(ACL _acl, Tollgate _tollgate, DandelionVoting _dandelionVoting) internal {
+    function _createTollgatePermissions(ACL _acl, Tollgate _tollgate, DandelionVoting _dandelionVoting, uint64 _voteOpenDate) internal {
         _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_AMOUNT_ROLE(), _dandelionVoting);
         _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_DESTINATION_ROLE(), _dandelionVoting);
-        _acl.createPermission(_tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), _dandelionVoting);
+        _acl.createPermission(_tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), this);
+        _setTimelock(_acl, _tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), _voteOpenDate);
+        _acl.setPermissionManager(_dandelionVoting, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE());
     }
 
     function _createRedemptionsPermissions(ACL _acl, Redemptions _redemptions, DandelionVoting _dandelionVoting)
@@ -417,6 +425,11 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         _acl.grantPermissionP(_who, _where, _what, params);
     }
 
+    function _setTimelock(ACL _acl, address _who, address _where, bytes32 _what, uint64 _date) private {
+        uint256[] memory params = new uint256[](1);
+        params[0] = _paramsTo256(TIMESTAMP_PARAM_ID, uint8(Op.GTE), uint240(_date));
+        _acl.grantPermissionP(_who, _where, _what, params);
+    }
     function _paramsTo256(uint8 _id,uint8 _op, uint240 _value) private pure returns (uint256) {
         return (uint256(_id) << 248) + (uint256(_op) << 240) + _value;
     }
