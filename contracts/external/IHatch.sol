@@ -8,6 +8,12 @@ contract IHatch {
     bytes32 public constant CONTRIBUTE_ROLE = keccak256("CONTRIBUTE_ROLE");
     bytes32 public constant CLOSE_ROLE = keccak256("CLOSE_ROLE");
 
+    event SetOpenDate (uint64 date);
+    event Close       ();
+    event Contribute  (address indexed contributor, uint256 value, uint256 amount, uint256 vestedPurchaseId);
+    event Refund      (address indexed contributor, uint256 value, uint256 amount, uint256 vestedPurchaseId);
+
+    address                                         public tokenManager;
     ERC20                                           public token;
 
     address                                         public reserve;
@@ -48,7 +54,7 @@ contract IHatch {
     function open() external;
 
     function contribute(uint256 _value) external;
-
+    function refund(address _contributor, uint256 _vestedPurchaseId) external;
     function close() external;
     function state() external view returns (uint8);
     function contributionToTokens(uint256 _value) public view returns (uint256);

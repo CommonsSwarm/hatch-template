@@ -4,14 +4,14 @@ import "@aragon/templates-shared/contracts/BaseTemplate.sol";
 import "@aragon/os/contracts/lib/math/SafeMath64.sol";
 import "@1hive/apps-dandelion-voting/contracts/DandelionVoting.sol";
 import "@1hive/apps-redemptions/contracts/Redemptions.sol";
-import "@1hive/apps-token-manager/contracts/HookedTokenManager.sol";
+import "@commonsswarm/migration-tools/contracts/MigrationTools.sol";
 import {ITollgate as Tollgate} from "./external/ITollgate.sol";
 import {IHatch as Hatch} from "./external/IHatch.sol";
 import {IHatchOracle as HatchOracle} from "./external/IHatchOracle.sol";
 import {IImpactHours as ImpactHours} from "./external/IImpactHours.sol";
 import "./appIds/AppIdsXDai.sol";
 
-contract HatchTemplate is BaseTemplate, AppIdsXDai {
+contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
     using SafeMath64 for uint64;
 
     string constant private ERROR_MISSING_MEMBERS = "MISSING_MEMBERS";
@@ -28,6 +28,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     address private constant ANY_ENTITY = address(-1);
     uint256 private constant ONE_HUNDRED_PERCENT = 1e6;
     uint8 private constant ORACLE_PARAM_ID = 203;
+    uint8 private constant TIMESTAMP_PARAM_ID = 201;
     enum Op { NONE, EQ, NEQ, GT, LT, GTE, LTE, RET, NOT, AND, OR, XOR, IF_ELSE }
 
     struct StoredAddresses {
@@ -35,12 +36,13 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         ACL acl;
         DandelionVoting dandelionVoting;
         Agent fundingPoolAgent;
-        HookedTokenManager hookedTokenManager;
+        TokenManager tokenManager;
         address collateralToken;
         Agent reserveAgent;
         Hatch hatch;
         HatchOracle hatchOracle;
         ImpactHours impactHours;
+        Tollgate tollgate;
     }
 
     mapping(address => StoredAddresses) internal senderStoredAddresses;
@@ -77,14 +79,14 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         Agent fundingPoolAgent = _installDefaultAgentApp(dao);
 
         DandelionVoting dandelionVoting = _installDandelionVotingApp(dao, voteToken, _votingSettings);
-        HookedTokenManager hookedTokenManager = _installHookedTokenManagerApp(dao, voteToken, TOKEN_TRANSFERABLE, TOKEN_MAX_PER_ACCOUNT);
+        TokenManager tokenManager = _installTokenManagerApp(dao, voteToken, TOKEN_TRANSFERABLE, TOKEN_MAX_PER_ACCOUNT);
 
         _createAgentPermissions(acl, Agent(fundingPoolAgent), dandelionVoting, address(dandelionVoting));
 
         _createEvmScriptsRegistryPermissions(acl, dandelionVoting, address(dandelionVoting));
-        _createCustomVotingPermissions(acl, dandelionVoting, hookedTokenManager);
+        _createCustomVotingPermissions(acl, dandelionVoting);
 
-        _storeAddressesTxOne(dao, acl, dandelionVoting, fundingPoolAgent, hookedTokenManager, _collateralToken);
+        _storeAddressesTxOne(dao, acl, dandelionVoting, fundingPoolAgent, tokenManager, _collateralToken);
     }
 
     /**
@@ -96,7 +98,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     * @param _vestingCliffPeriod Vesting cliff length for hatch bought tokens in seconds
     * @param _vestingCompletePeriod Vesting complete length for hatch bought tokens in seconds
     * @param _hatchTributePct Percent of raised hatch funds sent to the organization in PPM
-    * @param _openDate The time the hatch starts, requires manual opening if set to 0
+    * @param _hatchOpenDate The time the hatch starts, requires manual opening if set to 0
     * @param _ihToken Impact hours token address
     * @param _maxIHRate Max theoretical rate per impact hour in Collateral_token per IH
     * @param _expectedRaise How much will we need to raise to reach 1/2 of the MAX_IH_RATE 
@@ -109,7 +111,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         uint64 _vestingCliffPeriod,
         uint64 _vestingCompletePeriod,
         uint256 _hatchTributePct,
-        uint64 _openDate,
+        uint64 _hatchOpenDate,
         address _ihToken,
         uint256 _maxIHRate,
         uint256 _expectedRaise
@@ -126,12 +128,10 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
             _vestingCliffPeriod,
             _vestingCompletePeriod,
             _hatchTributePct,
-            _openDate
+            _hatchOpenDate
         );
 
         senderStoredAddresses[msg.sender].impactHours = _installImpactHours(senderStoredAddresses[msg.sender].dao, _ihToken, _hatch, _maxIHRate, _expectedRaise);
-
-        _createHookedTokenManagerPermissions();
         senderStoredAddresses[msg.sender].acl.createPermission(ANY_ENTITY, senderStoredAddresses[msg.sender].impactHours, senderStoredAddresses[msg.sender].impactHours.CLOSE_HATCH_ROLE(), address(this));
     }
 
@@ -141,6 +141,9 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     * @param _redeemableTokens Array of initially redeemable tokens
     * @param _tollgateFeeToken The token used to pay the tollgate fee
     * @param _tollgateFeeAmount The tollgate fee amount
+    * @param _scoreToken Token for Hatch Oracle used to determine contributor allowance
+    * @param _hatchOracleRatio Hatch Oracle ratio used to determine contributor allowance
+    * @param _voteOpenAfterPeriod Time period after which vote creation will be allowed
     */
     function createDaoTxThree(
         string _id,
@@ -148,7 +151,8 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         ERC20 _tollgateFeeToken,
         uint256 _tollgateFeeAmount,
         address _scoreToken,
-        uint256 _hatchOracleRatio
+        uint256 _hatchOracleRatio,
+        uint64 _voteOpenAfterPeriod
     )
         public
     {
@@ -156,27 +160,35 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         require(senderStoredAddresses[msg.sender].dao != address(0), ERROR_NO_CACHE);
         require(senderStoredAddresses[msg.sender].reserveAgent != address(0), ERROR_NO_CACHE);
 
-        (,
+        (Kernel dao,
         ACL acl,
         DandelionVoting dandelionVoting,
-        Agent fundingPoolAgent,
-        HookedTokenManager hookedTokenManager,
-        address collateralToken) = _getStoredAddressesTxOne();
+        ,
+        TokenManager tokenManager,
+        ) = _getStoredAddressesTxOne();
 
-        Tollgate tollgate = _installTollgate(senderStoredAddresses[msg.sender].dao, _tollgateFeeToken, _tollgateFeeAmount, address(fundingPoolAgent));
-        _createTollgatePermissions(acl, tollgate, dandelionVoting);
+        senderStoredAddresses[msg.sender].tollgate = _installTollgate(dao, _tollgateFeeToken, _tollgateFeeAmount, address(senderStoredAddresses[msg.sender].fundingPoolAgent));
+        _createTollgatePermissions(acl, senderStoredAddresses[msg.sender].tollgate, dandelionVoting, getTimestamp64().add(_voteOpenAfterPeriod));
 
-        _createPermissionForTemplate(acl, hookedTokenManager, hookedTokenManager.SET_HOOK_ROLE());
-        hookedTokenManager.registerHook(dandelionVoting);
-        _removePermissionFromTemplate(acl, hookedTokenManager, hookedTokenManager.SET_HOOK_ROLE());
-
-        senderStoredAddresses[msg.sender].hatchOracle = _installHatchOracleApp(senderStoredAddresses[msg.sender].dao, _scoreToken, _hatchOracleRatio, senderStoredAddresses[msg.sender].hatch);
+        senderStoredAddresses[msg.sender].hatchOracle = _installHatchOracleApp(dao, _scoreToken, _hatchOracleRatio, senderStoredAddresses[msg.sender].hatch);
         _createHatchPermissions();
 
-        Redemptions redemptions = _installRedemptions(senderStoredAddresses[msg.sender].dao, senderStoredAddresses[msg.sender].reserveAgent, hookedTokenManager, _redeemableTokens);
+        Redemptions redemptions = _installRedemptions(dao, senderStoredAddresses[msg.sender].reserveAgent, tokenManager, _redeemableTokens);
         _createRedemptionsPermissions(acl, redemptions, dandelionVoting);
         _createAgentPermissions(acl, senderStoredAddresses[msg.sender].reserveAgent, dandelionVoting, address(dandelionVoting));
-        acl.createPermission(redemptions, senderStoredAddresses[msg.sender].reserveAgent, senderStoredAddresses[msg.sender].reserveAgent.TRANSFER_ROLE(), address(dandelionVoting));
+        
+        MigrationTools migrationTools = _installMigrationTools(dao, tokenManager, senderStoredAddresses[msg.sender].reserveAgent, senderStoredAddresses[msg.sender].fundingPoolAgent);
+        acl.createPermission(dandelionVoting, migrationTools, migrationTools.MIGRATE_ROLE(), dandelionVoting);
+
+        _createTokenManagerPermissions(redemptions);
+
+        // Grant permission for redemptions and migration tools to tranfer on reserveAgent
+        acl.createPermission(redemptions, senderStoredAddresses[msg.sender].reserveAgent, senderStoredAddresses[msg.sender].reserveAgent.TRANSFER_ROLE(), this);
+        acl.grantPermission(migrationTools, senderStoredAddresses[msg.sender].reserveAgent, senderStoredAddresses[msg.sender].reserveAgent.TRANSFER_ROLE());
+        acl.setPermissionManager(dandelionVoting, senderStoredAddresses[msg.sender].reserveAgent, senderStoredAddresses[msg.sender].reserveAgent.TRANSFER_ROLE());
+
+        // Grant permission for migration tools to transfer on funding pool
+        acl.createPermission(migrationTools, senderStoredAddresses[msg.sender].fundingPoolAgent, senderStoredAddresses[msg.sender].fundingPoolAgent.TRANSFER_ROLE(), dandelionVoting);
 
         _validateId(_id);
 
@@ -187,24 +199,10 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
 
     // App installation/setup functions //
 
-    function _installHookedTokenManagerApp(
-        Kernel _dao,
-        MiniMeToken _token,
-        bool _transferable,
-        uint256 _maxAccountTokens
-    )
-        internal returns (HookedTokenManager)
-    {
-        HookedTokenManager hookedTokenManager = HookedTokenManager(_installDefaultApp(_dao, HOOKED_TOKEN_MANAGER_APP_ID));
-        _token.changeController(hookedTokenManager);
-        hookedTokenManager.initialize(_token, _transferable, _maxAccountTokens);
-        return hookedTokenManager;
-    }
-
     function _installHatchOracleApp(Kernel _dao, address _scoreToken, uint256 _oracleRatio, address _hatch)
         internal returns(HatchOracle)
     {
-        HatchOracle hatchOracle = HatchOracle(_installNonDefaultApp(_dao, HATCH_ORACLE_ID));
+        HatchOracle hatchOracle = HatchOracle(_installNonDefaultApp(_dao, HATCH_ORACLE_APP_ID));
         hatchOracle.initialize(_scoreToken, _oracleRatio, _hatch);
         return hatchOracle;
     }
@@ -212,7 +210,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     function _installImpactHours(Kernel _dao, address _impactHoursToken, address _hatch, uint256 _maxRate, uint256 _expectedRaise)
         internal returns(ImpactHours)
     {
-        ImpactHours ih = ImpactHours(_installNonDefaultApp(_dao, IMPACT_HOURS_ID));
+        ImpactHours ih = ImpactHours(_installNonDefaultApp(_dao, IMPACT_HOURS_APP_ID));
         ih.initialize(_impactHoursToken, _hatch, _maxRate, _expectedRaise);
         return ih;
     }
@@ -234,12 +232,18 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         return tollgate;
     }
 
-    function _installRedemptions(Kernel _dao, Agent _agent, HookedTokenManager _hookedTokenManager, address[] _redeemableTokens)
+    function _installRedemptions(Kernel _dao, Agent _agent, TokenManager _tokenManager, address[] _redeemableTokens)
         internal returns (Redemptions)
     {
         Redemptions redemptions = Redemptions(_installNonDefaultApp(_dao, REDEMPTIONS_APP_ID));
-        redemptions.initialize(_agent, TokenManager(_hookedTokenManager), _redeemableTokens);
+        redemptions.initialize(_agent, TokenManager(_tokenManager), _redeemableTokens);
         return redemptions;
+    }
+
+    function _installMigrationTools(Kernel _dao, TokenManager _tokenManager, Vault _vault1, Vault _vault2) internal returns (MigrationTools) {
+        MigrationTools migrationTools = MigrationTools(_installNonDefaultApp(_dao, MIGRATION_TOOLS_APP_ID));
+        migrationTools.initialize(TokenManager(address(_tokenManager)), _vault1, _vault2);
+        return migrationTools;
     }
 
     function _installHatch(
@@ -257,7 +261,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         
         (Kernel dao,,,,, address collateralToken) = _getStoredAddressesTxOne();
         Agent reserveAgent = _installNonDefaultAgentApp(dao);
-        Hatch hatch = Hatch(_installNonDefaultApp(dao, HATCH_ID));
+        Hatch hatch = Hatch(_installNonDefaultApp(dao, HATCH_APP_ID));
 
         _storeAddressesTxTwo(reserveAgent, hatch);
 
@@ -291,7 +295,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
     {
         // Accessing deployed contracts directly due to stack too deep error.
         senderStoredAddresses[msg.sender].hatch.initialize(
-            TokenManager(senderStoredAddresses[msg.sender].hookedTokenManager),
+            TokenManager(senderStoredAddresses[msg.sender].tokenManager),
             senderStoredAddresses[msg.sender].reserveAgent,
             senderStoredAddresses[msg.sender].fundingPoolAgent,
             _collateralToken,
@@ -309,7 +313,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
 
     // Permission setting functions //
 
-    function _createCustomVotingPermissions(ACL _acl, DandelionVoting _dandelionVoting, HookedTokenManager _hookedTokenManager)
+    function _createCustomVotingPermissions(ACL _acl, DandelionVoting _dandelionVoting)
         internal
     {
         _acl.createPermission(_dandelionVoting, _dandelionVoting, _dandelionVoting.MODIFY_QUORUM_ROLE(), _dandelionVoting);
@@ -318,39 +322,45 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         _acl.createPermission(_dandelionVoting, _dandelionVoting, _dandelionVoting.MODIFY_EXECUTION_DELAY_ROLE(), _dandelionVoting);
     }
 
-    function _createTollgatePermissions(ACL _acl, Tollgate _tollgate, DandelionVoting _dandelionVoting) internal {
-        (,,DandelionVoting dandelionVoting,,,) = _getStoredAddressesTxOne();
-        _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_AMOUNT_ROLE(), dandelionVoting);
-        _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_DESTINATION_ROLE(), dandelionVoting);
-        _acl.createPermission(_tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), dandelionVoting);
+    function _createTollgatePermissions(ACL _acl, Tollgate _tollgate, DandelionVoting _dandelionVoting, uint64 _voteOpenDate) internal {
+        _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_AMOUNT_ROLE(), _dandelionVoting);
+        _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_DESTINATION_ROLE(), _dandelionVoting);
+        _acl.createPermission(_tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), this);
+        _setTimelock(_acl, _tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), _voteOpenDate);
+        _acl.setPermissionManager(_dandelionVoting, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE());
     }
 
     function _createRedemptionsPermissions(ACL _acl, Redemptions _redemptions, DandelionVoting _dandelionVoting)
         internal
     {
-        (,,DandelionVoting dandelionVoting,,,) = _getStoredAddressesTxOne();
         _acl.createPermission(ANY_ENTITY, _redemptions, _redemptions.REDEEM_ROLE(), address(this));
         _setOracle(_acl, ANY_ENTITY, _redemptions, _redemptions.REDEEM_ROLE(), _dandelionVoting);
-        _acl.setPermissionManager(dandelionVoting, _redemptions, _redemptions.REDEEM_ROLE());
+        _acl.setPermissionManager(_dandelionVoting, _redemptions, _redemptions.REDEEM_ROLE());
 
-        _acl.createPermission(_dandelionVoting, _redemptions, _redemptions.ADD_TOKEN_ROLE(), dandelionVoting);
-        _acl.createPermission(_dandelionVoting, _redemptions, _redemptions.REMOVE_TOKEN_ROLE(), dandelionVoting);
+        _acl.createPermission(_dandelionVoting, _redemptions, _redemptions.ADD_TOKEN_ROLE(), _dandelionVoting);
+        _acl.createPermission(_dandelionVoting, _redemptions, _redemptions.REMOVE_TOKEN_ROLE(), _dandelionVoting);
     }
 
-    function _createHookedTokenManagerPermissions() internal {
-        (, ACL acl, DandelionVoting dandelionVoting,, HookedTokenManager hookedTokenManager,) = _getStoredAddressesTxOne();
+    function _createMigrationToolsPermissions(ACL _acl, MigrationTools _migrationTools, DandelionVoting _dandelionVoting) internal {
+        _acl.createPermission(ANY_ENTITY, _migrationTools, _migrationTools.MIGRATE_ROLE(), _dandelionVoting);
+    }
+
+    function _createTokenManagerPermissions(Redemptions _redemptions) internal {
+        (, ACL acl, DandelionVoting dandelionVoting,, TokenManager tokenManager,) = _getStoredAddressesTxOne();
         (, Hatch hatch, ImpactHours impactHours) = _getStoredAddressesTxTwo();
 
-        acl.createPermission(impactHours, hookedTokenManager, hookedTokenManager.MINT_ROLE(), dandelionVoting);
-        acl.createPermission(hatch, hookedTokenManager, hookedTokenManager.ISSUE_ROLE(), dandelionVoting);
-        acl.createPermission(hatch, hookedTokenManager, hookedTokenManager.ASSIGN_ROLE(), dandelionVoting);
-        acl.createPermission(hatch, hookedTokenManager, hookedTokenManager.REVOKE_VESTINGS_ROLE(), dandelionVoting);
-        acl.createPermission(hatch, hookedTokenManager, hookedTokenManager.BURN_ROLE(), dandelionVoting);
+        acl.createPermission(impactHours, tokenManager, tokenManager.MINT_ROLE(), dandelionVoting);
+        acl.createPermission(hatch, tokenManager, tokenManager.ISSUE_ROLE(), dandelionVoting);
+        acl.createPermission(hatch, tokenManager, tokenManager.ASSIGN_ROLE(), dandelionVoting);
+        acl.createPermission(hatch, tokenManager, tokenManager.REVOKE_VESTINGS_ROLE(), dandelionVoting);
+        acl.createPermission(hatch, tokenManager, tokenManager.BURN_ROLE(), this);
+        acl.grantPermission(_redemptions, tokenManager, tokenManager.BURN_ROLE());
+        acl.setPermissionManager(dandelionVoting, tokenManager, tokenManager.BURN_ROLE());
     }
 
     function _createHatchPermissions() internal {
         (, ACL acl, DandelionVoting dandelionVoting,,,) = _getStoredAddressesTxOne();
-        (Agent reserveAgent, Hatch hatch, ImpactHours impactHours) = _getStoredAddressesTxTwo();
+        (, Hatch hatch, ImpactHours impactHours) = _getStoredAddressesTxTwo();
 
         acl.createPermission(ANY_ENTITY, hatch, hatch.OPEN_ROLE(), dandelionVoting);
         acl.createPermission(ANY_ENTITY, hatch, hatch.CONTRIBUTE_ROLE(), this);
@@ -361,7 +371,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
 
     // Temporary Storage functions //
 
-    function _storeAddressesTxOne(Kernel _dao, ACL _acl, DandelionVoting _dandelionVoting, Agent _agent, HookedTokenManager _hookedTokenManager, address _collateralToken)
+    function _storeAddressesTxOne(Kernel _dao, ACL _acl, DandelionVoting _dandelionVoting, Agent _agent, TokenManager _tokenManager, address _collateralToken)
         internal
     {
         StoredAddresses storage addresses = senderStoredAddresses[msg.sender];
@@ -369,18 +379,18 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         addresses.acl = _acl;
         addresses.dandelionVoting = _dandelionVoting;
         addresses.fundingPoolAgent = _agent;
-        addresses.hookedTokenManager = _hookedTokenManager;
+        addresses.tokenManager = _tokenManager;
         addresses.collateralToken = _collateralToken;
     }
 
-    function _getStoredAddressesTxOne() internal returns (Kernel, ACL, DandelionVoting, Agent, HookedTokenManager, address) {
+    function _getStoredAddressesTxOne() internal view returns (Kernel, ACL, DandelionVoting, Agent, TokenManager, address) {
         StoredAddresses storage addresses = senderStoredAddresses[msg.sender];
         return (
             addresses.dao,
             addresses.acl,
             addresses.dandelionVoting,
             addresses.fundingPoolAgent,
-            addresses.hookedTokenManager,
+            addresses.tokenManager,
             addresses.collateralToken
         );
     }
@@ -393,7 +403,7 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         addresses.hatch = _hatch;
     }
 
-    function _getStoredAddressesTxTwo() internal returns (Agent, Hatch, ImpactHours) {
+    function _getStoredAddressesTxTwo() internal view returns (Agent, Hatch, ImpactHours) {
         StoredAddresses storage addresses = senderStoredAddresses[msg.sender];
         return (
             addresses.reserveAgent,
@@ -415,7 +425,12 @@ contract HatchTemplate is BaseTemplate, AppIdsXDai {
         _acl.grantPermissionP(_who, _where, _what, params);
     }
 
-    function _paramsTo256(uint8 _id,uint8 _op, uint240 _value) private returns (uint256) {
+    function _setTimelock(ACL _acl, address _who, address _where, bytes32 _what, uint64 _date) private {
+        uint256[] memory params = new uint256[](1);
+        params[0] = _paramsTo256(TIMESTAMP_PARAM_ID, uint8(Op.GTE), uint240(_date));
+        _acl.grantPermissionP(_who, _where, _what, params);
+    }
+    function _paramsTo256(uint8 _id,uint8 _op, uint240 _value) private pure returns (uint256) {
         return (uint256(_id) << 248) + (uint256(_op) << 240) + _value;
     }
 }
