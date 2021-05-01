@@ -143,7 +143,7 @@ contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
     * @param _tollgateFeeAmount The tollgate fee amount
     * @param _scoreToken Token for Hatch Oracle used to determine contributor allowance
     * @param _hatchOracleRatio Hatch Oracle ratio used to determine contributor allowance
-    * @param _voteOpenAfterPeriod Time period in which vote creation will not be allowed
+    * @param _voteOpenAfterPeriod Time period after which vote creation will be allowed
     */
     function createDaoTxThree(
         string _id,
