@@ -43,7 +43,7 @@ const {
   voteExecutionDelayBlocks,
   collateralToken,
   ihToken,
-  ihSlope,
+  expectedRaise,
   ONE_TOKEN,
   hatchMinGoal,
   hatchMaxGoal,
@@ -95,11 +95,6 @@ const createDaoTxOne = async (hatchTemplate: HatchTemplate, log: Function): Prom
 };
 
 const createDaoTxTwo = async (hatchTemplate: HatchTemplate, log: Function): Promise<void> => {
-  const impactHoursToken = (await ethers.getContractAt("MiniMeToken", ihToken)) as MiniMeToken;
-
-  const totalImpactHours = await impactHoursToken.totalSupply();
-  const expectedRaise = ihSlope.mul(totalImpactHours).div(ONE_TOKEN);
-
   const tx = await hatchTemplate.createDaoTxTwo(
     hatchMinGoal,
     hatchMaxGoal,

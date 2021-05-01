@@ -13,6 +13,7 @@
   "minAcceptQuorum": 0.1,
   "tollgateFee": 3,
   "hatchMinGoal": 5,
+  "hatchTargetGoal": 500,
   "hatchMaxGoal": 1000,
   "hatchPeriodDays": 15,
   "hatchMintRate": 10000,
@@ -20,5 +21,5 @@
   "hatchTribute": 0.05,
   "ihToken": "0x40d9247f41812782b378df1ff7ffc0fb27bd25b7",
   "maxIHRate": 0.02,
-  "ihSlope": 0.01
+  "targetGoalIHRate": 0.01
 }

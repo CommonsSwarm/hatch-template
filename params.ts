@@ -71,9 +71,9 @@ const ihToken = params => params.ihToken;
 // Max theoretical collateral token rate per impact hour
 const maxIHRate = params => BigNumber.from(params.maxIHRate * PPM).mul(ONE_TOKEN).div(PPM);
 
-// How much will we need to raise to reach 1/2 of the MAX_IH_RATE divided by total IH
-const expectedRaisePerIH = params => BigNumber.from(params.ihSlope * PPM)
-  .mul(ONE_TOKEN)
+// How much will we need to raise to reach 1/2 of the MAX_IH_RATE
+const expectedRaise = params => BigNumber.from(Math.floor(PPM * params.maxIHRate / params.targetGoalIHRate - PPM))
+  .mul(params.hatchTargetGoal)
   .div(PPM);
 
 const getParams = async (blockTime = DEFAULT_CHAIN) => {
@@ -104,7 +104,7 @@ const getParams = async (blockTime = DEFAULT_CHAIN) => {
     openDate: OPEN_DATE,
     ihToken: ihToken(params),
     maxIHRate: maxIHRate(params),
-    ihSlope: expectedRaisePerIH(params),
+    expectedRaise: expectedRaise(params),
     supportRequired: supportRequired(params),
     minAcceptQuorum: minAcceptQuorum(params),
     voteDurationBlocks: voteDuration(params) / blockTime,
