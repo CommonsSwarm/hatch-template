@@ -9,6 +9,7 @@ async function main(): Promise<void> {
   const hatchToken = (await ethers.getContractAt("MiniMeToken", await migrationTools.snapshotToken())) as MiniMeToken;
   console.log(`Token snapshot at block ${(await migrationTools.snapshotBlock()).toNumber()}.`)
   await claimTokens(migrationTools, hatchToken, { gasPrice: 20000000000, gasLimit: 9500000 })
+  console.log("All tokens claimed.")
 }
 
 // We recommend this pattern to be able to use async/await everywhere

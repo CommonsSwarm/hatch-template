@@ -32,8 +32,13 @@ async function main() {
     calldata: encodeActCall('newVote(bytes,string,bool)', [script, '', false]),
   }])
   const [, tollgateFee] = await tollgate.forwardFee()
-  await contributionToken.approve(tollgate.address, tollgateFee)
-  await tollgate.forward(voteScript)
+  const balance = await contributionToken.balanceOf(await ethers.getSigners()[0])
+  if (balance.gte(tollgateFee)) {
+    await contributionToken.approve(tollgate.address, tollgateFee)
+    await tollgate.forward(voteScript)
+  } else {
+    console.error("Not enough funds to pay for tollgate")
+  }
 }
 
 // We recommend this pattern to be able to use async/await everywhere

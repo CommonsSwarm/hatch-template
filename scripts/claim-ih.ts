@@ -10,6 +10,7 @@ async function main(): Promise<void> {
   const impactHours = await ethers.getContractAt("IImpactHours", impactHoursAddress) as IImpactHours
   await claimTokens(impactHours, impactHoursToken, { gasPrice: 20000000000, gasLimit: 9500000 })
   await impactHours.closeHatch({ gasPrice: 20000000000, gasLimit: 9500000 })
+  console.log('Closed.')
 }
 
 // We recommend this pattern to be able to use async/await everywhere
