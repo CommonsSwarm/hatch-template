@@ -63,7 +63,7 @@ export default async function main(log = console.log): Promise<void> {
     );
   }
 
-  spinner.stopAndPersist({ text: "All hatch tokens refunded!", symbol: "🙌" });
+  spinner.stopAndPersist({ text: "All transactions have been sent!", symbol: "🙌" });
 }
 
 // We recommend this pattern to be able to use async/await everywhere
