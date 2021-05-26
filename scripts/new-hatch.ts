@@ -121,8 +121,7 @@ const createDaoTxThree = async (hatchTemplate: HatchTemplate, log: Function): Pr
     collateralToken,
     tollgateFee,
     scoreToken,
-    hatchOracleRatio,
-    vestingCompletePeriod
+    hatchOracleRatio
   );
 
   await tx.wait();

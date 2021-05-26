@@ -143,7 +143,6 @@ contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
     * @param _tollgateFeeAmount The tollgate fee amount
     * @param _scoreToken Token for Hatch Oracle used to determine contributor allowance
     * @param _hatchOracleRatio Hatch Oracle ratio used to determine contributor allowance
-    * @param _voteOpenAfterPeriod Time period after which vote creation will be allowed
     */
     function createDaoTxThree(
         string _id,
@@ -151,8 +150,7 @@ contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
         ERC20 _tollgateFeeToken,
         uint256 _tollgateFeeAmount,
         address _scoreToken,
-        uint256 _hatchOracleRatio,
-        uint64 _voteOpenAfterPeriod
+        uint256 _hatchOracleRatio
     )
         public
     {
@@ -168,7 +166,7 @@ contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
         ) = _getStoredAddressesTxOne();
 
         senderStoredAddresses[msg.sender].tollgate = _installTollgate(dao, _tollgateFeeToken, _tollgateFeeAmount, address(senderStoredAddresses[msg.sender].fundingPoolAgent));
-        _createTollgatePermissions(acl, senderStoredAddresses[msg.sender].tollgate, dandelionVoting, getTimestamp64().add(_voteOpenAfterPeriod));
+        _createTollgatePermissions(acl, senderStoredAddresses[msg.sender].tollgate, dandelionVoting);
 
         senderStoredAddresses[msg.sender].hatchOracle = _installHatchOracleApp(dao, _scoreToken, _hatchOracleRatio, senderStoredAddresses[msg.sender].hatch);
         _createHatchPermissions();
@@ -322,11 +320,11 @@ contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
         _acl.createPermission(_dandelionVoting, _dandelionVoting, _dandelionVoting.MODIFY_EXECUTION_DELAY_ROLE(), _dandelionVoting);
     }
 
-    function _createTollgatePermissions(ACL _acl, Tollgate _tollgate, DandelionVoting _dandelionVoting, uint64 _voteOpenDate) internal {
+    function _createTollgatePermissions(ACL _acl, Tollgate _tollgate, DandelionVoting _dandelionVoting) internal {
         _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_AMOUNT_ROLE(), _dandelionVoting);
         _acl.createPermission(_dandelionVoting, _tollgate, _tollgate.CHANGE_DESTINATION_ROLE(), _dandelionVoting);
         _acl.createPermission(_tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), this);
-        _setTimelock(_acl, _tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), _voteOpenDate);
+        _setOracle(_acl, _tollgate, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE(), senderStoredAddresses[msg.sender].hatch);
         _acl.setPermissionManager(_dandelionVoting, _dandelionVoting, _dandelionVoting.CREATE_VOTES_ROLE());
     }
 
@@ -425,11 +423,6 @@ contract HatchTemplate is BaseTemplate, TimeHelpers, AppIdsXDai {
         _acl.grantPermissionP(_who, _where, _what, params);
     }
 
-    function _setTimelock(ACL _acl, address _who, address _where, bytes32 _what, uint64 _date) private {
-        uint256[] memory params = new uint256[](1);
-        params[0] = _paramsTo256(TIMESTAMP_PARAM_ID, uint8(Op.GTE), uint240(_date));
-        _acl.grantPermissionP(_who, _where, _what, params);
-    }
     function _paramsTo256(uint8 _id,uint8 _op, uint240 _value) private pure returns (uint256) {
         return (uint256(_id) << 248) + (uint256(_op) << 240) + _value;
     }

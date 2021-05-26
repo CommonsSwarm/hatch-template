@@ -1,6 +1,7 @@
 import { assert } from "chai";
 
 const ERROR_PREFIX = "Returned error:";
+const ERROR_PREFIX_2 = "Error: ";
 const THROW_PREFIX = "VM Exception while processing transaction: revert";
 
 async function assertThrows(blockOrPromise, expectedErrorCode, expectedReason) {
@@ -27,7 +28,7 @@ export async function assertRevert(blockOrPromise, expectedReason) {
 
   // Truffle v5 provides `error.reason`, but truffle v4 and buidler do not.
   if (!error.reason && error.message.includes(THROW_PREFIX)) {
-    error.reason = error.message.replace(ERROR_PREFIX, "").replace(THROW_PREFIX, "").trim();
+    error.reason = error.message.replace(ERROR_PREFIX, "").replace(ERROR_PREFIX_2, "").replace(THROW_PREFIX, "").trim();
   }
 
   // Truffle v5 sometimes adds an extra ' -- Reason given: reason.' to the error message 🤷
