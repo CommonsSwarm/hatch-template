@@ -2,7 +2,9 @@ import { BigNumber } from "@ethersproject/bignumber";
 import { ContractTransaction, Overrides } from "@ethersproject/contracts";
 import fetch from "node-fetch";
 
-import { ERC20, IHatch, IImpactHours, MigrationTools, MiniMeToken } from "../../typechain/index";
+import { ERC20, IHatch, IImpactHours, MiniMeToken } from "../../typechain/index";
+
+const TOKENHOLDERS_LENGTH = 250
 
 export const ZERO_ADDRESS = '0x' + '0'.repeat(40) // 0x0000...0000
 
@@ -47,15 +49,14 @@ export const getContributors = async (tokenAddress: string): Promise<string[]> =
   // })
   //   .then((res) => res.json())
   //   .then((res) => res.data.tokenHolders.map(({ address }) => address));
-  // return fetch(`https://blockscout.com/xdai/mainnet/api?module=token&action=getTokenHolders&contractaddress=${tokenAddress}&offset=200`)
-  //   .then(res => res.json())
-  //   .then(res => res.result.map(({ address }) => address))
-  const res = await import('../../api.json')
-  return Promise.resolve(res.result.map(({ address }) => address))
+  return fetch(`https://blockscout.com/xdai/mainnet/api?module=token&action=getTokenHolders&contractaddress=${tokenAddress}&offset=${TOKENHOLDERS_LENGTH}`)
+    .then(res => res.json())
+    .then(res => res.result.map(({ address }) => address))
+  // const res = await import('../../api.json')
+  // return Promise.resolve(res.result.map(({ address }) => address))
 };
 
-export const claimTokens = async (claimableContract: IImpactHours | MigrationTools, token: MiniMeToken, overrides?: Overrides): Promise<boolean> => {
-  const claim = claimableContract.claimReward || claimableContract.claimForMany
+export const claimTokens = async (claimFunction: Function, token: MiniMeToken, overrides?: Overrides): Promise<boolean> => {
   const CONTRIBUTORS_PROCESSED_PER_TRANSACTION = 10;
   const contributors = await getContributors(token.address);
   const total = Math.ceil(contributors.length / CONTRIBUTORS_PROCESSED_PER_TRANSACTION);
@@ -64,7 +65,7 @@ export const claimTokens = async (claimableContract: IImpactHours | MigrationToo
 
   for (let i = 0; i < contributors.length; i += CONTRIBUTORS_PROCESSED_PER_TRANSACTION) {
     try {
-      tx = await claim(contributors.slice(i, i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION), overrides ?? {});
+      tx = await claimFunction(contributors.slice(i, i + CONTRIBUTORS_PROCESSED_PER_TRANSACTION), overrides ?? {});
 
       await tx.wait();
 

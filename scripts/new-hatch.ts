@@ -1,7 +1,7 @@
 import hre, { ethers } from "hardhat";
 import { Contract } from "@ethersproject/contracts";
 import { Signer } from "@ethersproject/abstract-signer";
-import { HatchTemplate, Kernel, MiniMeToken } from "../typechain";
+import { HatchTemplate, Kernel } from "../typechain";
 import getParams from "../params";
 
 const { deployments } = hre;
@@ -44,7 +44,6 @@ const {
   collateralToken,
   ihToken,
   expectedRaise,
-  ONE_TOKEN,
   hatchMinGoal,
   hatchMaxGoal,
   hatchPeriod,
@@ -68,12 +67,13 @@ const getAddress = async (selectedFilter: string, contract: Contract, transactio
   return new Promise((resolve, reject) => {
     const filter = contract.filters[selectedFilter]();
 
-    contract.on(filter, (contractAddress, event) => {
-      if (event.transactionHash === transactionHash) {
-        contract.removeAllListeners(filter);
-        resolve(contractAddress);
-      }
-    });
+    contract
+      .queryFilter(filter)
+      .then((events) => {
+        const filteredEvent = events.filter((event) => event.transactionHash === transactionHash);
+        resolve(filteredEvent[0]?.args.dao);
+      })
+      .catch((err) => reject(err));
   });
 };
 

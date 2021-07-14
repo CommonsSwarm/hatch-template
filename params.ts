@@ -3,7 +3,8 @@ import hre, { ethers } from "hardhat";
 const { BigNumber } = ethers;
 
 // xdai as default network.
-const DEFAULT_CHAIN = 5;
+const DEFAULT_CHAIN_BLOCKTIME = 5;
+const DEFAULT_REFUND_PERIOD_DAYS = 7; // Be aware that during the hatch period and this period, the DAO can't create votes. Do not make it too big, as it locks down the DAO!
 const network = hre.network.name
 
 // Helpers, no need to change
@@ -34,9 +35,9 @@ const hatchOracleRatio = params => BigNumber.from(params.hatchOracleRatio * PPM)
 
 // # Dandelion Voting Settings
 // Used for administrative or binary choice decisions with ragequit-like functionality on Dandelion Voting
-const voteDuration = params => Math.floor(params.voteDurationDays * DAYS) // Alternatively: 3 * DAYS;
-const voteBuffer = params => Math.floor(params.voteBufferHours * HOURS);
-const voteExecutionDelay = params => Math.floor(params.rageQuitHours * HOURS) // Alternatively: 24 * HOURS;
+const voteDuration = (params, blockTime) => Math.floor(params.voteDurationDays * DAYS / blockTime);
+const voteBuffer = (params, blockTime) => Math.floor(params.voteBufferHours * HOURS / blockTime);
+const voteExecutionDelay = (params, blockTime) => Math.floor(params.rageQuitHours * HOURS / blockTime);
 const supportRequired = params => String(params.supportRequired * ONE_HUNDRED_PERCENT);
 const minAcceptQuorum = params => String(params.minAcceptQuorum * ONE_HUNDRED_PERCENT);
 
@@ -50,13 +51,13 @@ const hatchMinGoal = params => BigNumber.from(params.hatchMinGoal).mul(ONE_TOKEN
 // What is the Max number of COLLATERAL_TOKEN's the Hatch can recieve
 const hatchMaxGoal = params => BigNumber.from(params.hatchMaxGoal).mul(ONE_TOKEN);
 // How long should the hatch period last
-const hatchPeriod = params => params.hatchPeriodDays * DAYS;
+const hatchPeriod = params => Math.floor(params.hatchPeriodDays * DAYS);
 // How many organization tokens should be minted per collateral token
 const hatchExchangeRate = params => BigNumber.from(params.hatchMintRate * PPM)
   .mul(ONE_TOKEN)
   .div(fundraisingOneToken(params));
 // When does the cliff for vesting restrictions end
-const vestingCliffPeriod = params => Math.floor(hatchPeriod(params) + params.refundPeriodDays * DAYS); // This is now the Refund period
+const vestingCliffPeriod = params => Math.floor(hatchPeriod(params) + DEFAULT_REFUND_PERIOD_DAYS * DAYS); // This is now the Refund period
 // When will the Hatchers be fully vested and able to use the redemptions app
 const vestingCompletePeriod = params => vestingCliffPeriod(params) + 1; // 1 week and 1 second after hatch
 // What percentage of Hatch contributions should go to the Funding Pool and therefore be non refundable
@@ -72,11 +73,10 @@ const ihToken = params => params.ihToken;
 const maxIHRate = params => BigNumber.from(params.maxIHRate * PPM).mul(ONE_TOKEN).div(PPM);
 
 // How much will we need to raise to reach 1/2 of the MAX_IH_RATE
-const expectedRaise = params => BigNumber.from(Math.floor(PPM * params.maxIHRate / params.targetGoalIHRate - PPM))
-  .mul(params.hatchTargetGoal)
-  .div(PPM);
+const expectedRaise = params => BigNumber.from(Math.floor((params.maxIHRate / params.targetGoalIHRate - 1) * (10 ** params.collateralTokenDecimals)).toString())
+  .mul(params.hatchTargetGoal).toString();
 
-const getParams = async (blockTime = DEFAULT_CHAIN) => {
+const getParams = async (blockTime = DEFAULT_CHAIN_BLOCKTIME) => {
 
   const params = await import(`./params-${network}.json`);
   return {
@@ -107,9 +107,9 @@ const getParams = async (blockTime = DEFAULT_CHAIN) => {
     expectedRaise: expectedRaise(params),
     supportRequired: supportRequired(params),
     minAcceptQuorum: minAcceptQuorum(params),
-    voteDurationBlocks: voteDuration(params) / blockTime,
-    voteBufferBlocks: voteBuffer(params) / blockTime,
-    voteExecutionDelayBlocks: voteExecutionDelay(params) / blockTime,
+    voteDurationBlocks: voteDuration(params, blockTime),
+    voteBufferBlocks: voteBuffer(params, blockTime),
+    voteExecutionDelayBlocks: voteExecutionDelay(params, blockTime),
   }
 };
 
