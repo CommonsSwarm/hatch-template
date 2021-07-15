@@ -1,19 +1,23 @@
-import { ethers } from "hardhat"
-import { claimTokens } from '../test/helpers/helpers'
+import { ethers } from "hardhat";
+import { claimTokens } from "../test/helpers/helpers";
 import { MiniMeToken, IImpactHours } from "../typechain";
 
-const impactHoursAddress = 'TBD'
+const impactHoursAddress = "TBD";
 
 async function main(): Promise<void> {
-  const impactHours = await ethers.getContractAt("IImpactHours", impactHoursAddress) as IImpactHours
-  const impactHoursToken = (await ethers.getContractAt("MiniMeToken", await impactHours.token())) as MiniMeToken;
+  const impactHours = (await ethers.getContractAt("IImpactHours", impactHoursAddress)) as IImpactHours;
+  const clonedImpactHourToken = (await ethers.getContractAt("MiniMeToken", await impactHours.token())) as MiniMeToken;
+  const impactHoursToken = (await ethers.getContractAt(
+    "MiniMeToken",
+    await clonedImpactHourToken.parentToken()
+  )) as MiniMeToken;
   try {
-    await claimTokens(impactHours.claimReward, impactHoursToken, { gasPrice: 25000000000, gasLimit: 9500000 })
-    await impactHours.closeHatch({ gasPrice: 200000000000, gasLimit: 950000 })
-    console.log('Closed.')
+    await claimTokens(impactHours.claimReward, impactHoursToken, { gasPrice: 25000000000, gasLimit: 9500000 });
+    await impactHours.closeHatch({ gasPrice: 200000000000, gasLimit: 950000 });
+    console.log("Closed.");
   } catch (e) {
-    console.error(e)
-    console.error('Couldn\'t close.')
+    console.error(e);
+    console.error("Couldn't close.");
   }
 }
 
