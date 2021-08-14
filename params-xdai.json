@@ -18,7 +18,7 @@
   "hatchPeriodDays": 30,
   "hatchMintRate": 1,
   "hatchTribute": 0.02,
-  "ihToken": "TBD",
+  "ihToken": "0xf1665f141c0c4403525d7df4757012d832fd3c1b",
   "maxIHRate": 226,
   "targetGoalIHRate": 77.07
 }

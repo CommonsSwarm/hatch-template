@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 import { claimTokens } from "../test/helpers/helpers";
 import { MiniMeToken, IImpactHours } from "../typechain";
 
-const impactHoursAddress = "TBD";
+const impactHoursAddress = '0x9dfaad87c722116ccD50dE582651E474d503daA8'
 
 async function main(): Promise<void> {
   const impactHours = (await ethers.getContractAt("IImpactHours", impactHoursAddress)) as IImpactHours;

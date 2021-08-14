@@ -95,7 +95,7 @@ const config: HardhatUserConfig = {
       allowUnlimitedContractSize: true,
       forking: {
         url: "https://xdai-archive.blockscout.com",
-        blockNumber: 16246465,
+        blockNumber: 17086000,
       },
     },
     localhost: {
@@ -141,7 +141,7 @@ const config: HardhatUserConfig = {
       },
     },
     xdai: {
-      url: "https://xdai.1hive.org/",
+      url: "https://damp-shy-frog.xdai.quiknode.pro/",
       gasPrice: 1000000000,
       accounts: {
         mnemonic: mnemonic(),
